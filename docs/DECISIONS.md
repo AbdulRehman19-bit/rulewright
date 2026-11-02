@@ -255,3 +255,6 @@ The confirmation ran inside `console.status`, so with a priced model (Groq, Anth
 
 **D72. `tenacity` is a declared dependency.**
 litellm imports it lazily when `num_retries` is set and does not require it, so every hosted-model call failed with "tenacity import failed" on a clean install (found on the first real Groq scan; Ollama runs had it installed by chance). Declared it. Alternative: do our own retry loop and drop `num_retries`; not worth it for one small package. Revisit if litellm starts declaring it.
+
+**D73. Groq default is `groq/openai/gpt-oss-120b`.**
+The first real Groq scan failed with "model `llama-3.3-70b-versatile` does not exist or you do not have access": Groq retired it for non-enterprise accounts on 2026-08-16 and recommends `openai/gpt-oss-120b`. D63 chose the old id from memory, which was the mistake; model ids age quickly. Switched the default; `--model` still overrides, and the hosted-model failure message already names the model. Alternative: list models from the Groq API at run time and pick one; more moving parts than a documented default. Revisit when Groq deprecates this one (check console.groq.com/docs/deprecations).

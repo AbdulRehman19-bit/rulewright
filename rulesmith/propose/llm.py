@@ -8,7 +8,7 @@ from typing import Protocol
 from pydantic import BaseModel
 
 OLLAMA_URL = "http://localhost:11434"
-GROQ_MODEL = "groq/llama-3.3-70b-versatile"
+GROQ_MODEL = "groq/openai/gpt-oss-120b"
 REQUEST_TIMEOUT = 120  # seconds; a stuck hosted call should fail, not hang the scan
 LOCAL_TIMEOUT = 900  # a 7B model on a CPU needs minutes per call
 RETRIES = 3  # rate limits (HTTP 429) are common on free tiers

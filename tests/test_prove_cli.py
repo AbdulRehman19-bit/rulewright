@@ -105,7 +105,7 @@ def test_evidence_outside_the_history_asks_for_more_commits(
 def test_paid_models_are_confirmed_first_and_nothing_runs_on_no(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    chat = ArmAwareChat(model="groq/llama-3.3-70b-versatile")
+    chat = ArmAwareChat(model="groq/openai/gpt-oss-120b")
     _patch(monkeypatch, chat, LocalSandbox)
     monkeypatch.setattr(
         "rulesmith.prove.runner.litellm_price", lambda m, i, o: 0.05

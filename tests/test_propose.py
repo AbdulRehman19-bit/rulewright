@@ -323,7 +323,7 @@ def test_the_draft_prompt_leads_with_the_humans_fix(tmp_path: Path) -> None:
 
 def test_groq_is_chosen_after_a_local_model_and_before_other_keys() -> None:
     env = {"GROQ_API_KEY": "k", "ANTHROPIC_API_KEY": "k", "OPENAI_API_KEY": "k"}
-    assert pick_model(env, []) == "groq/llama-3.3-70b-versatile"
+    assert pick_model(env, []) == "groq/openai/gpt-oss-120b"
     assert pick_model(env, ["llama3.1:8b"]) == "ollama/llama3.1:8b"
     assert pick_model({"ANTHROPIC_API_KEY": "k"}, []) == "anthropic/claude-haiku-5-5"
 
@@ -332,7 +332,7 @@ def test_groq_cost_uses_the_pricer() -> None:
     def pricer(model: str, tokens_in: int, tokens_out: int) -> float | None:
         return 0.0005 if model.startswith("groq/") else None
 
-    est = estimate_cost("groq/llama-3.3-70b-versatile", [("s" * 400, "u" * 400)] * 2, pricer)
+    est = estimate_cost("groq/openai/gpt-oss-120b", [("s" * 400, "u" * 400)] * 2, pricer)
     assert est.usd == 0.0005 and est.calls == 2
 
 

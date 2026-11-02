@@ -33,7 +33,7 @@ rulesmith prove r-3e6f373f  # replay past tasks with and without the rule (needs
 Mining and clustering run locally with no API key. Only the last step, writing the rule text,
 calls an LLM: a local Ollama model if one is running, otherwise your own `GROQ_API_KEY`,
 `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (or pick one with `--model`, any LiteLLM name such as
-`groq/llama-3.3-70b-versatile`). The estimated cost is shown, and you are asked, before any paid call.
+`groq/openai/gpt-oss-120b`). The estimated cost is shown, and you are asked, before any paid call.
 
 ## What a result looks like
 
@@ -52,7 +52,7 @@ Read 45 commits (15 agent-authored); 15 signal(s) [refix] in 3 cluster(s).
 generic rules from good clusters. A second check asks the model whether each rule is specific or
 generic advice and drops the generic ones (`--no-judge` skips it), but judge every rule by its
 evidence, and for real repos use a stronger model, for example
-`rulesmith scan --model groq/llama-3.3-70b-versatile` with your own key (the cost is shown first).
+`rulesmith scan --model groq/openai/gpt-oss-120b` with your own key (the cost is shown first).
 
 ## How it stays safe
 
