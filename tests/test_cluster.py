@@ -3,10 +3,10 @@ from datetime import UTC, datetime
 
 import numpy as np
 
-from rulesmith.cluster.embed import embed_signals, signal_summary
-from rulesmith.cluster.group import cluster_signals, cold_start_message
-from rulesmith.mine.signals import Signal
-from rulesmith.store import connect
+from rulewright.cluster.embed import embed_signals, signal_summary
+from rulewright.cluster.group import cluster_signals, cold_start_message
+from rulewright.mine.signals import Signal
+from rulewright.store import connect
 from tests.helpers import FakeEmbedder
 
 TS = datetime(2026, 1, 5, tzinfo=UTC)

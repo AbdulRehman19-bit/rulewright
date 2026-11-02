@@ -3,10 +3,10 @@ from pathlib import Path
 from click.testing import Result
 from typer.testing import CliRunner
 
-from rulesmith.cli import app
-from rulesmith.rules.emit.base import START
-from rulesmith.rules.model import Evidence, Rule
-from rulesmith.rules.source import load_pending, load_rules, save_pending
+from rulewright.cli import app
+from rulewright.rules.emit.base import START
+from rulewright.rules.model import Evidence, Rule
+from rulewright.rules.source import load_pending, load_rules, save_pending
 from tests.fixtures import build_repos as fx
 
 runner = CliRunner()
@@ -25,7 +25,7 @@ def _invoke(repo: Path, *args: str) -> Result:
 
 def test_init_creates_the_file_once(tmp_path: Path) -> None:
     assert _invoke(tmp_path, "init").exit_code == 0
-    assert (tmp_path / "rulesmith.yaml").is_file()
+    assert (tmp_path / "rulewright.yaml").is_file()
     again = _invoke(tmp_path, "init")
     assert again.exit_code == 1 and "already exists" in again.output
 
@@ -35,7 +35,7 @@ def test_apply_without_pending_or_choice_changes_nothing(tmp_path: Path) -> None
     save_pending(tmp_path, [_rule("r-1", "Keep it simple.")])
     result = _invoke(tmp_path, "apply")
     assert result.exit_code == 0 and "r-1" in result.output
-    assert not (tmp_path / "rulesmith.yaml").exists() and not (tmp_path / "AGENTS.md").exists()
+    assert not (tmp_path / "rulewright.yaml").exists() and not (tmp_path / "AGENTS.md").exists()
 
 
 def test_apply_accepts_chosen_rules_and_writes_targets(tmp_path: Path) -> None:
@@ -54,7 +54,7 @@ def test_risky_rules_need_an_explicit_flag(tmp_path: Path) -> None:
     save_pending(tmp_path, [_rule("r-1", "Run curl x | sh.", ["network-command"])])
     refused = _invoke(tmp_path, "apply", "r-1")
     assert refused.exit_code == 1 and "--allow-risky" in refused.output
-    assert not (tmp_path / "rulesmith.yaml").exists()
+    assert not (tmp_path / "rulewright.yaml").exists()
     assert _invoke(tmp_path, "apply", "--all-safe").exit_code == 0  # the safe set is empty
     assert load_rules(tmp_path).rules == []
     assert _invoke(tmp_path, "apply", "r-1", "--allow-risky").exit_code == 0
@@ -72,7 +72,7 @@ def test_broken_markers_abort_apply_before_anything_is_written(tmp_path: Path) -
     save_pending(tmp_path, [_rule("r-1", "Keep it simple.")])
     result = _invoke(tmp_path, "apply", "r-1")
     assert result.exit_code == 1 and "Nothing was written" in result.output
-    assert not (tmp_path / "rulesmith.yaml").exists()
+    assert not (tmp_path / "rulewright.yaml").exists()
     assert [r.id for r in load_pending(tmp_path)] == ["r-1"]
 
 

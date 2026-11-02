@@ -8,8 +8,8 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from rulesmith.mine.signals import Signal
-from rulesmith.rules.model import Rule
+from rulewright.mine.signals import Signal
+from rulewright.rules.model import Rule
 
 SILENT_AFTER = timedelta(days=90)
 _PATH_EXT = r"(?:py|js|ts|tsx|jsx|md|toml|json|yaml|yml|cfg|ini|txt|sh|go|rs|java|rb|sql)"

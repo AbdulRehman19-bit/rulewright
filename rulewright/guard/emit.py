@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from rulesmith.guard.profile import Pattern
+from rulewright.guard.profile import Pattern
 
 
 class SettingsError(Exception):

@@ -1,9 +1,9 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from rulesmith.mine.signals import Signal
-from rulesmith.rules.model import Rule
-from rulesmith.rules.stale import glob_match, stale_findings
+from rulewright.mine.signals import Signal
+from rulewright.rules.model import Rule
+from rulewright.rules.stale import glob_match, stale_findings
 from tests.fixtures import build_repos as fx
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)

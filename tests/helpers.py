@@ -7,8 +7,8 @@ from pathlib import Path
 
 import numpy as np
 
-from rulesmith.prove.sandbox import ExecResult, safe_relpath
-from rulesmith.store import Vector
+from rulewright.prove.sandbox import ExecResult, safe_relpath
+from rulewright.store import Vector
 
 GOOD_RULE = "Import settings from app.config, never from app.settings (removed in v2)."
 

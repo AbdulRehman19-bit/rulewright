@@ -1,6 +1,6 @@
-"""rulesmith.yaml: the single source of truth, committed to the repo.
+"""rulewright.yaml: the single source of truth, committed to the repo.
 
-Also the pending store (.rulesmith/pending.json) where `scan` leaves proposals until the user
+Also the pending store (.rulewright/pending.json) where `scan` leaves proposals until the user
 approves them with `apply`.
 """
 
@@ -10,10 +10,10 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, TypeAdapter
 
-from rulesmith.rules.model import Evidence, Rule, RuleStatus
+from rulewright.rules.model import Evidence, Rule, RuleStatus
 
-FILENAME = "rulesmith.yaml"
-PENDING = Path(".rulesmith") / "pending.json"
+FILENAME = "rulewright.yaml"
+PENDING = Path(".rulewright") / "pending.json"
 DEFAULT_TARGETS = ["agents_md", "claude_md", "cursor"]
 _SHA = re.compile(r"[0-9a-fA-F]{7,40}")
 
@@ -26,7 +26,7 @@ class _IndentedDumper(yaml.SafeDumper):
 
 
 class RulesFileError(Exception):
-    """rulesmith.yaml is unreadable or not in the expected shape."""
+    """rulewright.yaml is unreadable or not in the expected shape."""
 
 
 class RulesFile(BaseModel):

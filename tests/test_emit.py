@@ -4,10 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.rules.emit import plan_emit, write_changes
-from rulesmith.rules.emit.base import END, START, MarkerError, apply_block
-from rulesmith.rules.model import Rule
-from rulesmith.rules.source import RulesFile, load_rules
+from rulewright.rules.emit import plan_emit, write_changes
+from rulewright.rules.emit.base import END, START, MarkerError, apply_block
+from rulewright.rules.model import Rule
+from rulewright.rules.source import RulesFile, load_rules
 
 GOLDEN = Path(__file__).parent / "golden"
 GOLDEN_FILES = {
@@ -23,7 +23,7 @@ def _rule(text: str, rid: str = "r-1") -> Rule:
 
 
 def test_every_target_matches_its_golden_file(tmp_path: Path) -> None:
-    shutil.copy(GOLDEN / "rulesmith.yaml", tmp_path / "rulesmith.yaml")
+    shutil.copy(GOLDEN / "rulewright.yaml", tmp_path / "rulewright.yaml")
     changes = plan_emit(tmp_path, load_rules(tmp_path))
     assert {c.target for c in changes} == set(GOLDEN_FILES)
     for c in changes:
@@ -34,7 +34,7 @@ def test_every_target_matches_its_golden_file(tmp_path: Path) -> None:
 
 
 def test_only_accepted_rules_are_emitted(tmp_path: Path) -> None:
-    shutil.copy(GOLDEN / "rulesmith.yaml", tmp_path / "rulesmith.yaml")
+    shutil.copy(GOLDEN / "rulewright.yaml", tmp_path / "rulewright.yaml")
     for c in plan_emit(tmp_path, load_rules(tmp_path)):
         assert "only proposed" not in c.new and "Import settings" in c.new
 
@@ -81,7 +81,7 @@ def test_no_rules_and_no_file_creates_nothing(tmp_path: Path) -> None:
 
 
 def test_up_to_date_files_produce_no_changes(tmp_path: Path) -> None:
-    shutil.copy(GOLDEN / "rulesmith.yaml", tmp_path / "rulesmith.yaml")
+    shutil.copy(GOLDEN / "rulewright.yaml", tmp_path / "rulewright.yaml")
     rf = load_rules(tmp_path)
     write_changes(plan_emit(tmp_path, rf))
     assert plan_emit(tmp_path, rf) == []

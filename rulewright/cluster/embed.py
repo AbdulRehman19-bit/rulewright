@@ -6,8 +6,8 @@ from typing import Protocol
 
 import numpy as np
 
-from rulesmith.mine.signals import Signal
-from rulesmith.store import Vector, get_embeddings, put_embeddings
+from rulewright.mine.signals import Signal
+from rulewright.store import Vector, get_embeddings, put_embeddings
 
 SUMMARY_CHANGE_CHARS = 200
 DEFAULT_MODEL ="sentence-transformers/all-MiniLM-L6-v2"

@@ -16,13 +16,13 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from rulesmith.propose.llm import LLMClient, litellm_price
-from rulesmith.propose.writer import MAX_REASON_CHARS, wrap_data
-from rulesmith.prove import judge
-from rulesmith.prove.agent import AgentRunner
-from rulesmith.prove.sandbox import Sandbox
-from rulesmith.prove.tasks import Task, materialize
-from rulesmith.rules.model import Rule
+from rulewright.propose.llm import LLMClient, litellm_price
+from rulewright.propose.writer import MAX_REASON_CHARS, wrap_data
+from rulewright.prove import judge
+from rulewright.prove.agent import AgentRunner
+from rulewright.prove.sandbox import Sandbox
+from rulewright.prove.tasks import Task, materialize
+from rulewright.rules.model import Rule
 
 Pricer = Callable[[str, int, int], float | None]
 AVG_STEP_TOKENS_IN = 3000  # system prompt + growing transcript, rough
@@ -174,7 +174,7 @@ def _one_run(
     agent: AgentRunner, sandbox_factory: Callable[[Path], Sandbox], pricer: Pricer,
     judge_client: LLMClient | None,
 ) -> RunRecord:  # fmt: skip
-    work = Path(tempfile.mkdtemp(prefix="rulesmith-prove-"))
+    work = Path(tempfile.mkdtemp(prefix="rulewright-prove-"))
     try:
         materialize(repo, task.parent_sha, work)
         before = judge.snapshot(work)

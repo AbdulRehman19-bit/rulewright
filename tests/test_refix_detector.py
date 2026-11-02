@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.mine.detectors import detect_refixes
+from rulewright.ingest.git_history import read_commits
+from rulewright.mine.detectors import detect_refixes
 from tests.fixtures import build_repos as fx
 
 
@@ -26,7 +26,7 @@ def test_revert_is_not_double_counted_as_refix(tmp_path: Path) -> None:
 
 
 def test_unrelated_deletions_in_a_busy_file_are_not_signals(tmp_path: Path) -> None:
-    from rulesmith.mine.detectors import detect_reverts
+    from rulewright.mine.detectors import detect_reverts
 
     fx.build_busy_file(tmp_path / "r")
     history = read_commits(tmp_path / "r")

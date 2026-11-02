@@ -7,8 +7,8 @@ from numpy.typing import NDArray
 from pydantic import BaseModel
 from sklearn.cluster import HDBSCAN
 
-from rulesmith.mine.signals import Signal
-from rulesmith.store import Vector
+from rulewright.mine.signals import Signal
+from rulewright.store import Vector
 
 MIN_CLUSTER_SIZE = 3  # spec: only clusters of 3+ signals become rules
 MIN_CLUSTERS = 3  # spec: fewer than this triggers the cold-start message

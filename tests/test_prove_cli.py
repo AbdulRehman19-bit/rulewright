@@ -6,10 +6,10 @@ import pytest
 from click.testing import Result
 from typer.testing import CliRunner
 
-import rulesmith.cli as cli
-from rulesmith.prove.sandbox import DockerSandbox
-from rulesmith.rules.model import Evidence, Rule
-from rulesmith.rules.source import RulesFile, save_rules
+import rulewright.cli as cli
+from rulewright.prove.sandbox import DockerSandbox
+from rulewright.rules.model import Evidence, Rule
+from rulewright.rules.source import RulesFile, save_rules
 from tests.fixtures import build_repos as fx
 from tests.helpers import LocalSandbox, ScriptedChat, action
 from tests.test_prove_docker import _docker_ready
@@ -73,7 +73,7 @@ def test_prove_reports_recurrence_without_and_with_the_rule(
     assert result.exit_code == 0, result.output
     assert "1/1 (100%)" in result.output and "0/1 (0%)" in result.output
     assert "Evidence, not proof" in result.output and "1 task(s) x 2 arms" in result.output
-    saved = json.loads((repo / ".rulesmith" / "prove" / "r-imports.json").read_text("utf-8"))
+    saved = json.loads((repo / ".rulewright" / "prove" / "r-imports.json").read_text("utf-8"))
     assert saved["rule_id"] == "r-imports" and len(saved["records"]) == 2
 
 
@@ -108,7 +108,7 @@ def test_paid_models_are_confirmed_first_and_nothing_runs_on_no(
     chat = ArmAwareChat(model="groq/openai/gpt-oss-120b")
     _patch(monkeypatch, chat, LocalSandbox)
     monkeypatch.setattr(
-        "rulesmith.prove.runner.litellm_price", lambda m, i, o: 0.05
+        "rulewright.prove.runner.litellm_price", lambda m, i, o: 0.05
     )
     monkeypatch.setattr(cli, "estimate_runs", lambda m, n: (1000, 100, 0.05))
     declined = runner.invoke(cli.app, ["prove", "r-imports", "--repo", str(repo)], input="n\n")

@@ -12,8 +12,8 @@ from typing import Protocol
 
 from pydantic import BaseModel
 
-from rulesmith.propose.llm import CHARS_PER_TOKEN, ChatClient
-from rulesmith.prove.sandbox import Sandbox, SandboxError
+from rulewright.propose.llm import CHARS_PER_TOKEN, ChatClient
+from rulewright.prove.sandbox import Sandbox, SandboxError
 
 MAX_STEPS = 12
 COMMAND_TIMEOUT = 60  # seconds per command inside the sandbox

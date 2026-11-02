@@ -6,24 +6,24 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from rulesmith.cluster.embed import Embedder, embed_signals
-from rulesmith.cluster.group import Cluster, cluster_signals, cold_start_message
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.ingest.sessions.base import SessionSource
-from rulesmith.mine.detectors import (
+from rulewright.cluster.embed import Embedder, embed_signals
+from rulewright.cluster.group import Cluster, cluster_signals, cold_start_message
+from rulewright.ingest.git_history import read_commits
+from rulewright.ingest.sessions.base import SessionSource
+from rulewright.mine.detectors import (
     dedupe_signals,
     detect_corrections,
     detect_refixes,
     detect_reverts,
 )
-from rulesmith.mine.score import score_signals
-from rulesmith.mine.signals import Signal
-from rulesmith.pr import commit_url
-from rulesmith.propose.llm import CostEstimate, LLMClient, estimate_cost
-from rulesmith.propose.writer import Proposals, build_prompt, propose_rules
-from rulesmith.rules.source import RulesFile
-from rulesmith.rules.stale import StaleFinding, stale_findings
-from rulesmith.store import open_store
+from rulewright.mine.score import score_signals
+from rulewright.mine.signals import Signal
+from rulewright.pr import commit_url
+from rulewright.propose.llm import CostEstimate, LLMClient, estimate_cost
+from rulewright.propose.writer import Proposals, build_prompt, propose_rules
+from rulewright.rules.source import RulesFile
+from rulewright.rules.stale import StaleFinding, stale_findings
+from rulewright.store import open_store
 
 MAX_RULES = 10  # spec: print 5-10 proposed rules
 

@@ -1,8 +1,8 @@
 import json
 from pathlib import Path
 
-from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource, project_slug
-from rulesmith.mine.detectors import detect_corrections
+from rulewright.ingest.sessions.claude_code import ClaudeCodeSource, project_slug
+from rulewright.mine.detectors import detect_corrections
 
 
 def _rec(kind: str, uuid: str, content: object, minute: int, **extra: object) -> str:

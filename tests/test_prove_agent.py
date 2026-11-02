@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.prove.agent import MAX_STEPS, BuiltinAgent, parse_action, system_prompt
-from rulesmith.prove.sandbox import SandboxError, safe_relpath
+from rulewright.prove.agent import MAX_STEPS, BuiltinAgent, parse_action, system_prompt
+from rulewright.prove.sandbox import SandboxError, safe_relpath
 from tests.helpers import LocalSandbox, ScriptedChat, action
 
 

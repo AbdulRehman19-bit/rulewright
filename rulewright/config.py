@@ -1,4 +1,4 @@
-"""Load .rulesmith/config.toml. Every key is optional; defaults match the spec."""
+"""Load .rulewright/config.toml. Every key is optional; defaults match the spec."""
 
 import tomllib
 from pathlib import Path
@@ -13,7 +13,7 @@ class Config(BaseModel):
 
 
 def load_config(repo: Path) -> Config:
-    path = repo / ".rulesmith" / "config.toml"
+    path = repo / ".rulewright" / "config.toml"
     if not path.is_file():
         return Config()
     return Config.model_validate(tomllib.loads(path.read_text(encoding="utf-8")))

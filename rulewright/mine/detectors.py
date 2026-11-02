@@ -9,9 +9,9 @@ import re
 from collections import Counter
 from datetime import timedelta
 
-from rulesmith.ingest.git_history import Commit, FileChange
-from rulesmith.ingest.sessions.base import SessionMessage
-from rulesmith.mine.signals import Signal
+from rulewright.ingest.git_history import Commit, FileChange
+from rulewright.ingest.sessions.base import SessionMessage
+from rulewright.mine.signals import Signal
 
 REVERT_WINDOW = timedelta(days=7)
 REFIX_WINDOW = timedelta(hours=48)

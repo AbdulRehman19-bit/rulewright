@@ -1,4 +1,4 @@
-"""SQLite cache in .rulesmith/: embeddings now, signals and rule history in later phases.
+"""SQLite cache in .rulewright/: embeddings now, signals and rule history in later phases.
 
 All SQL lives in this module.
 """
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS embeddings (
 
 
 def open_store(repo: Path) -> sqlite3.Connection:
-    d = repo / ".rulesmith"
+    d = repo / ".rulewright"
     d.mkdir(exist_ok=True)
     return connect(d / "cache.db")
 

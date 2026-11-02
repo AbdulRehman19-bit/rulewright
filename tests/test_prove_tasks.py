@@ -3,11 +3,11 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
-from rulesmith.prove import judge
-from rulesmith.prove.tasks import build_tasks, materialize, task_prompt
-from rulesmith.rules.model import Evidence, Rule
+from rulewright.ingest.git_history import read_commits
+from rulewright.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
+from rulewright.prove import judge
+from rulewright.prove.tasks import build_tasks, materialize, task_prompt
+from rulewright.rules.model import Evidence, Rule
 from tests.fixtures import build_repos as fx
 
 
@@ -48,7 +48,7 @@ def test_at_most_the_limit_newest_first(tmp_path: Path) -> None:
 def test_the_prompt_is_the_message_without_attribution() -> None:
     from datetime import UTC, datetime
 
-    from rulesmith.ingest.git_history import Commit
+    from rulewright.ingest.git_history import Commit
 
     commit = Commit(
         sha="a" * 40, parents=["b" * 40], author_name="x", author_email="x@x", ts=datetime.now(UTC),

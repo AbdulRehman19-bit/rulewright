@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from rulesmith.mine.signals import Signal
+from rulewright.mine.signals import Signal
 
 HALF_LIFE_DAYS = 180.0
 THRESHOLD = 0.2

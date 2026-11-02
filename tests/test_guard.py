@@ -7,8 +7,8 @@ import pytest
 from click.testing import Result
 from typer.testing import CliRunner
 
-import rulesmith.cli as cli
-from rulesmith.guard.emit import (
+import rulewright.cli as cli
+from rulewright.guard.emit import (
     SettingsError,
     load_settings,
     render,
@@ -17,10 +17,10 @@ from rulesmith.guard.emit import (
     with_rules,
     write_atomic,
 )
-from rulesmith.guard.profile import allowable, build_profile, classify, split_command
-from rulesmith.ingest.sessions.base import ToolCall
-from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource, project_slug
-from rulesmith.ingest.sessions.codex import CodexSource
+from rulewright.guard.profile import allowable, build_profile, classify, split_command
+from rulewright.ingest.sessions.base import ToolCall
+from rulewright.ingest.sessions.claude_code import ClaudeCodeSource, project_slug
+from rulewright.ingest.sessions.codex import CodexSource
 
 T0 = datetime(2026, 5, 1, tzinfo=UTC)
 runner = CliRunner()

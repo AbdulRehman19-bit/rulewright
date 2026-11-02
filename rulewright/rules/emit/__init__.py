@@ -1,12 +1,12 @@
-"""Render rulesmith.yaml into every target file. Planning never writes; writing is explicit."""
+"""Render rulewright.yaml into every target file. Planning never writes; writing is explicit."""
 
 import difflib
 from dataclasses import dataclass
 from pathlib import Path
 
-from rulesmith.rules.emit import agents_md, claude_md, copilot, cursor
-from rulesmith.rules.emit.base import MarkerError, Target, apply_block
-from rulesmith.rules.source import RulesFile
+from rulewright.rules.emit import agents_md, claude_md, copilot, cursor
+from rulewright.rules.emit.base import MarkerError, Target, apply_block
+from rulewright.rules.source import RulesFile
 
 TARGETS: dict[str, Target] = {
     t.name: t for t in (agents_md.TARGET, claude_md.TARGET, cursor.TARGET, copilot.TARGET)

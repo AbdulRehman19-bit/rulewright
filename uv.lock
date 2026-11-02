@@ -2776,7 +2776,7 @@ wheels = [
 ]
 
 [[package]]
-name = "rulesmith"
+name = "rulewright"
 version = "0.1.0.dev0"
 source = { editable = "." }
 dependencies = [

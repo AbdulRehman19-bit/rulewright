@@ -8,7 +8,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from rulesmith.mine.signals import Signal
+from rulewright.mine.signals import Signal
 
 MAX_WORDS = 30
 MIN_EVIDENCE = 3

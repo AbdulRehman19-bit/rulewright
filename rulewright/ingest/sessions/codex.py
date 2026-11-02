@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from rulesmith.ingest.sessions.base import ToolCall
+from rulewright.ingest.sessions.base import ToolCall
 
 SHELL_TOOLS = {"shell", "shell_command", "exec_command", "local_shell"}
 DENIED_MARKERS = ("rejected by user", "denied by user", "user declined", "aborted by user")

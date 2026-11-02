@@ -1,12 +1,12 @@
-"""rulesmith-report.md: what a scan found, with the evidence behind every rule."""
+"""rulewright-report.md: what a scan found, with the evidence behind every rule."""
 
 from datetime import datetime
 from pathlib import Path
 
-from rulesmith.pipeline import ScanResult
-from rulesmith.pr import commit_url
+from rulewright.pipeline import ScanResult
+from rulewright.pr import commit_url
 
-REPORT_NAME = "rulesmith-report.md"
+REPORT_NAME = "rulewright-report.md"
 
 
 def _one_line(text: str) -> str:
@@ -19,7 +19,7 @@ def render_report(result: ScanResult, repo: Path, now: datetime) -> str:
         kinds[s.kind] = kinds.get(s.kind, 0) + 1
     by_id = {s.id: s for s in result.signals}
     out = [
-        "# rulesmith report",
+        "# rulewright report",
         "",
         f"Generated {now:%Y-%m-%d %H:%M} UTC. Nothing here has been applied.",
         "",

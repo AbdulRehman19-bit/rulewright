@@ -14,9 +14,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from rulesmith.cluster.group import Cluster
-from rulesmith.mine.signals import Signal
-from rulesmith.propose.guards import (
+from rulewright.cluster.group import Cluster
+from rulewright.mine.signals import Signal
+from rulewright.propose.guards import (
     MIN_EVIDENCE,
     TOP_UP_MAX,
     clean_scope,
@@ -24,9 +24,9 @@ from rulesmith.propose.guards import (
     risk_flags,
     verified_evidence,
 )
-from rulesmith.propose.llm import LLMClient
-from rulesmith.propose.redact import redact
-from rulesmith.rules.model import Evidence, Rule
+from rulewright.propose.llm import LLMClient
+from rulewright.propose.redact import redact
+from rulewright.rules.model import Evidence, Rule
 
 MAX_SIGNALS_IN_PROMPT = 12
 MAX_TEXT_CHARS = 300

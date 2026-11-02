@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.rules.model import Evidence, Rule
-from rulesmith.rules.source import (
+from rulewright.rules.model import Evidence, Rule
+from rulewright.rules.source import (
     FILENAME,
     RulesFile,
     RulesFileError,

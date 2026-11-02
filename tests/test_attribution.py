@@ -1,6 +1,6 @@
 import pytest
 
-from rulesmith.ingest.git_history import is_agent_commit
+from rulewright.ingest.git_history import is_agent_commit
 
 
 @pytest.mark.parametrize(

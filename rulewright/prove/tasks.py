@@ -13,9 +13,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from rulesmith.ingest.git_history import Commit
-from rulesmith.mine.signals import Signal
-from rulesmith.rules.model import Rule
+from rulewright.ingest.git_history import Commit
+from rulewright.mine.signals import Signal
+from rulewright.rules.model import Rule
 
 MAX_TASKS = 10  # spec: up to 10 past tasks
 MAX_PROMPT_CHARS = 1500

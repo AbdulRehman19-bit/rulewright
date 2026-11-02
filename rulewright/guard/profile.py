@@ -14,8 +14,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from rulesmith.ingest.sessions.base import ToolCall
-from rulesmith.propose.redact import redact
+from rulewright.ingest.sessions.base import ToolCall
+from rulewright.propose.redact import redact
 
 Tier = Literal["safe", "review", "never"]
 

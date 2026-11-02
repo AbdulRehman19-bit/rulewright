@@ -3,12 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
-from rulesmith.pipeline import ScanResult, run_scan
-from rulesmith.propose.llm import CostEstimate, LLMClient
-from rulesmith.rules.model import Rule
-from rulesmith.rules.source import RulesFile
+from rulewright.ingest.git_history import read_commits
+from rulewright.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
+from rulewright.pipeline import ScanResult, run_scan
+from rulewright.propose.llm import CostEstimate, LLMClient
+from rulewright.rules.model import Rule
+from rulewright.rules.source import RulesFile
 from tests.fixtures import build_repos as fx
 from tests.helpers import GOOD_RULE, CitingLLM, FakeEmbedder, RawLLM
 

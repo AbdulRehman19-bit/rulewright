@@ -1,7 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
-from rulesmith.mine.score import score_signals
-from rulesmith.mine.signals import Signal
+from rulewright.mine.score import score_signals
+from rulewright.mine.signals import Signal
 
 NOW = datetime(2026, 6, 1, tzinfo=UTC)
 

@@ -1,11 +1,11 @@
 [project]
-name = "rulesmith"
+name = "rulewright"
 version = "0.1.0.dev0"
 description = "Mine repeated coding-agent mistakes from git history and propose evidence-backed rules."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "rulesmith contributors" }]
+authors = [{ name = "rulewright contributors" }]
 keywords = ["ai-agents", "claude-code", "agents-md", "llm", "developer-tools"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -32,11 +32,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/AbdulRehman19-bit/rulesmith"
-Issues = "https://github.com/AbdulRehman19-bit/rulesmith/issues"
+Homepage = "https://github.com/AbdulRehman19-bit/rulewright"
+Issues = "https://github.com/AbdulRehman19-bit/rulewright/issues"
 
 [project.scripts]
-rulesmith = "rulesmith.cli:app"
+rulewright = "rulewright.cli:app"
 
 [dependency-groups]
 dev = [
@@ -51,7 +51,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rulesmith"]
+packages = ["rulewright"]
 
 [tool.ruff]
 line-length = 100

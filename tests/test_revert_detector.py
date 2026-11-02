@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.mine.detectors import detect_reverts
+from rulewright.ingest.git_history import read_commits
+from rulewright.mine.detectors import detect_reverts
 from tests.fixtures import build_repos as fx
 
 

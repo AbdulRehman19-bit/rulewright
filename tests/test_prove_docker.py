@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from rulesmith.prove.sandbox import DEFAULT_IMAGE, DockerSandbox, SandboxError
+from rulewright.prove.sandbox import DEFAULT_IMAGE, DockerSandbox, SandboxError
 
 
 def _docker_ready() -> bool:

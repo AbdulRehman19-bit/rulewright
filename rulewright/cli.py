@@ -8,9 +8,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from rulesmith.cluster.embed import Embedder, SentenceTransformerEmbedder
-from rulesmith.config import load_config
-from rulesmith.guard.emit import (
+from rulewright.cluster.embed import Embedder, SentenceTransformerEmbedder
+from rulewright.config import load_config
+from rulewright.guard.emit import (
     SettingsError,
     load_settings,
     render,
@@ -20,33 +20,33 @@ from rulesmith.guard.emit import (
     with_rules,
     write_atomic,
 )
-from rulesmith.guard.profile import MIN_USES, Pattern, allowable, build_profile
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.ingest.sessions.base import ToolCall, ToolCallSource
-from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource
-from rulesmith.ingest.sessions.codex import CodexSource
-from rulesmith.mine.detectors import (
+from rulewright.guard.profile import MIN_USES, Pattern, allowable, build_profile
+from rulewright.ingest.git_history import read_commits
+from rulewright.ingest.sessions.base import ToolCall, ToolCallSource
+from rulewright.ingest.sessions.claude_code import ClaudeCodeSource
+from rulewright.ingest.sessions.codex import CodexSource
+from rulewright.mine.detectors import (
     dedupe_signals,
     detect_corrections,
     detect_refixes,
     detect_reverts,
 )
-from rulesmith.pipeline import run_scan
-from rulesmith.pr import PRError, create_pr
-from rulesmith.propose.llm import (
+from rulewright.pipeline import run_scan
+from rulewright.pr import PRError, create_pr
+from rulewright.propose.llm import (
     CostEstimate,
     LiteLLMClient,
     ollama_models,
     pick_model,
 )
-from rulesmith.prove.agent import BuiltinAgent
-from rulesmith.prove.runner import ProveReport, estimate_runs, prove_rule
-from rulesmith.prove.sandbox import DEFAULT_IMAGE, DockerSandbox, Sandbox
-from rulesmith.prove.tasks import MAX_TASKS, build_tasks
-from rulesmith.report import REPORT_NAME, render_report
-from rulesmith.rules.emit import MarkerError, plan_emit, write_changes
-from rulesmith.rules.model import Rule
-from rulesmith.rules.source import (
+from rulewright.prove.agent import BuiltinAgent
+from rulewright.prove.runner import ProveReport, estimate_runs, prove_rule
+from rulewright.prove.sandbox import DEFAULT_IMAGE, DockerSandbox, Sandbox
+from rulewright.prove.tasks import MAX_TASKS, build_tasks
+from rulewright.report import REPORT_NAME, render_report
+from rulewright.rules.emit import MarkerError, plan_emit, write_changes
+from rulewright.rules.model import Rule
+from rulewright.rules.source import (
     FILENAME,
     RulesFile,
     RulesFileError,
@@ -55,7 +55,7 @@ from rulesmith.rules.source import (
     save_pending,
     save_rules,
 )
-from rulesmith.rules.stale import stale_findings
+from rulewright.rules.stale import stale_findings
 
 app = typer.Typer(help="Learn rules for your coding agent from its past mistakes.")
 console = Console()
@@ -95,17 +95,17 @@ def _emit(repo: Path, rules_file: RulesFile, dry_run: bool) -> None:
 
 @app.callback()
 def main() -> None:
-    """rulesmith command line."""
+    """rulewright command line."""
 
 
 @app.command()
 def init(repo: RepoOption = Path(".")) -> None:
-    """Create an empty rulesmith.yaml."""
+    """Create an empty rulewright.yaml."""
     path = repo / FILENAME
     if path.exists():
         raise _fail(f"{FILENAME} already exists; nothing changed.")
     save_rules(repo, RulesFile())
-    console.print(f"Created {path}. Add `.rulesmith/` to .gitignore; commit {FILENAME}.")
+    console.print(f"Created {path}. Add `.rulewright/` to .gitignore; commit {FILENAME}.")
 
 
 def _make_embedder() -> Embedder:
@@ -200,7 +200,7 @@ def scan(
     if result.proposals is not None:
         save_pending(repo, rules)
     if rules:
-        console.print("Nothing has been applied. Accept rules with `rulesmith apply <id> ...`.")
+        console.print("Nothing has been applied. Accept rules with `rulewright apply <id> ...`.")
     if pr:
         safe = [r for r in rules if not r.risk_flags]
         if not safe:
@@ -220,7 +220,7 @@ def emit(
     repo: RepoOption = Path("."),
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Show a diff, write nothing.")] = False,
 ) -> None:
-    """Re-render every target file from the accepted rules in rulesmith.yaml."""
+    """Re-render every target file from the accepted rules in rulewright.yaml."""
     _emit(repo, _load(repo), dry_run)
 
 
@@ -235,17 +235,17 @@ def apply(
     ] = False,
     repo: RepoOption = Path("."),
 ) -> None:
-    """Accept pending proposals into rulesmith.yaml and write the target files."""
+    """Accept pending proposals into rulewright.yaml and write the target files."""
     pending = load_pending(repo)
     if not pending:
-        raise _fail("No pending proposals. Run `rulesmith scan` first.")
+        raise _fail("No pending proposals. Run `rulewright scan` first.")
     if not ids and not all_safe:
         table = Table("id", "rule", "risk")
         for r in pending:
             flags = ", ".join(r.risk_flags) or "-"
             table.add_row(r.id, r.text, flags, style="red" if r.risk_flags else "")
         console.print(table)
-        console.print("Choose rules: `rulesmith apply <id> ...` or `--all-safe`.")
+        console.print("Choose rules: `rulewright apply <id> ...` or `--all-safe`.")
         return
     by_id = {r.id: r for r in pending}
     unknown = [i for i in ids or [] if i not in by_id]
@@ -283,7 +283,7 @@ def stale(
     repo: RepoOption = Path("."),
     commits: Annotated[int | None, typer.Option(help="Commits to read for activity.")] = None,
     mark: Annotated[
-        bool, typer.Option("--mark", help="Set stale rules to status 'stale' in rulesmith.yaml.")
+        bool, typer.Option("--mark", help="Set stale rules to status 'stale' in rulewright.yaml.")
     ] = False,
 ) -> None:
     """List accepted rules that mention missing paths or commands, or that went silent."""
@@ -306,7 +306,7 @@ def stale(
                 rules_file.add(rule, "stale")
         save_rules(repo, rules_file)
         marked = len({f.rule_id for f in findings})
-        console.print(f"Marked {marked} rule(s) stale; run `rulesmith emit`.")
+        console.print(f"Marked {marked} rule(s) stale; run `rulewright emit`.")
 
 
 def _docker_problem() -> str | None:
@@ -333,7 +333,7 @@ def _rate(report: ProveReport, arm: str) -> str:
 
 @app.command()
 def prove(
-    rule_id: Annotated[str, typer.Argument(help="Id of an accepted rule in rulesmith.yaml.")],
+    rule_id: Annotated[str, typer.Argument(help="Id of an accepted rule in rulewright.yaml.")],
     repo: RepoOption = Path("."),
     tasks: Annotated[int, typer.Option(help="Past tasks to replay (at most 10).")] = 10,
     trials: Annotated[int, typer.Option(help="Repeat each task this many times.")] = 1,
@@ -402,7 +402,7 @@ def prove(
         "[dim]Evidence, not proof: a handful of tasks, nondeterministic agents and "
         "prompts rebuilt from commit messages.[/dim]"
     )
-    out = repo / ".rulesmith" / "prove"
+    out = repo / ".rulewright" / "prove"
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{rule.id}.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
 

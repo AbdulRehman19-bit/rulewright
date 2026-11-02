@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from rulesmith.ingest.sessions.base import SessionMessage, ToolCall
+from rulewright.ingest.sessions.base import SessionMessage, ToolCall
 
 
 def project_slug(repo: Path) -> str:

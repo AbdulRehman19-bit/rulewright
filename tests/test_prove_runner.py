@@ -2,12 +2,12 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
-from rulesmith.ingest.git_history import read_commits
-from rulesmith.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
-from rulesmith.prove.agent import BuiltinAgent
-from rulesmith.prove.runner import estimate_runs, prove_rule
-from rulesmith.prove.tasks import Task, build_tasks
-from rulesmith.rules.model import Evidence, Rule
+from rulewright.ingest.git_history import read_commits
+from rulewright.mine.detectors import dedupe_signals, detect_refixes, detect_reverts
+from rulewright.prove.agent import BuiltinAgent
+from rulewright.prove.runner import estimate_runs, prove_rule
+from rulewright.prove.tasks import Task, build_tasks
+from rulewright.rules.model import Evidence, Rule
 from tests.fixtures import build_repos as fx
 from tests.helpers import LocalSandbox, ScriptedChat, action
 

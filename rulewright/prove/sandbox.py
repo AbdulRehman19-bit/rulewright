@@ -83,7 +83,7 @@ class DockerSandbox:
             working_dir=WORKDIR,
             environment={},  # no host environment, so no secrets
             user=user,
-            labels={"rulesmith": "prove"},
+            labels={"rulewright": "prove"},
         )
 
     def _ensure_image(self, image: str) -> None:

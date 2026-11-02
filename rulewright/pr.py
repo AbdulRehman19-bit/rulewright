@@ -13,9 +13,9 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from rulesmith.rules.emit import plan_emit, write_changes
-from rulesmith.rules.model import Rule
-from rulesmith.rules.source import FILENAME, RulesFile, save_rules
+from rulewright.rules.emit import plan_emit, write_changes
+from rulewright.rules.model import Rule
+from rulewright.rules.source import FILENAME, RulesFile, save_rules
 
 _GITHUB = re.compile(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$")
 Gh = Callable[[list[str], Path], str]
@@ -53,7 +53,7 @@ def commit_url(repo: Path, sha: str) -> str:
 
 
 def pr_body(rules: list[Rule], repo: Path) -> str:
-    lines = ["rulesmith proposes these rules. Each cites the evidence behind it.", ""]
+    lines = ["rulewright proposes these rules. Each cites the evidence behind it.", ""]
     for r in rules:
         lines.append(f"### {r.id}\n> {' '.join(r.text.split())}\n")
         lines.append("Scope: " + ", ".join(f"`{s}`" for s in r.scope) + "\n")
@@ -89,10 +89,10 @@ def create_pr(
     touched = [FILENAME, *(str(c.path.relative_to(repo)) for c in changes)]
     dirty = _git(repo, "status", "--porcelain", "--", *touched)
     if dirty:
-        raise PRError(f"uncommitted changes in files rulesmith would edit:\n{dirty}")
+        raise PRError(f"uncommitted changes in files rulewright would edit:\n{dirty}")
 
     original = _git(repo, "rev-parse", "--abbrev-ref", "HEAD")
-    branch = f"rulesmith/rules-{now:%Y%m%d-%H%M%S}"
+    branch = f"rulewright/rules-{now:%Y%m%d-%H%M%S}"
     _git(repo, "switch", "-q", "-c", branch)
     notes: list[str] = []
     pushed, url = False, None
@@ -100,17 +100,17 @@ def create_pr(
         save_rules(repo, updated)
         write_changes(changes)
         _git(repo, "add", "--", *touched)
-        _git(repo, "commit", "-q", "-m", f"Add {len(rules)} rule(s) learned by rulesmith")
+        _git(repo, "commit", "-q", "-m", f"Add {len(rules)} rule(s) learned by rulewright")
         if _git(repo, "remote", check=False).split():
             _git(repo, "push", "-q", "-u", "origin", branch)
             pushed = True
             try:
                 body = pr_body(rules, repo)
-                body_file = repo / ".rulesmith" / "pr-body.md"
+                body_file = repo / ".rulewright" / "pr-body.md"
                 body_file.parent.mkdir(exist_ok=True)
                 body_file.write_text(body, encoding="utf-8")
                 url = gh(
-                    ["pr", "create", "--title", f"rulesmith: {len(rules)} proposed rule(s)",
+                    ["pr", "create", "--title", f"rulewright: {len(rules)} proposed rule(s)",
                      "--body-file", str(body_file)],
                     repo,
                 )  # fmt: skip

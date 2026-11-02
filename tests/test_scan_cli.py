@@ -7,9 +7,9 @@ import pytest
 from click.testing import Result
 from typer.testing import CliRunner
 
-import rulesmith.cli as cli
-from rulesmith.report import REPORT_NAME
-from rulesmith.rules.source import load_pending
+import rulewright.cli as cli
+from rulewright.report import REPORT_NAME
+from rulewright.rules.source import load_pending
 from tests.fixtures import build_repos as fx
 from tests.helpers import CitingLLM, FakeEmbedder
 
@@ -38,7 +38,7 @@ def _scan(repo: Path, *args: str, user_input: str | None = None) -> Result:
 
 def _git_status(repo: Path) -> str:
     """Porcelain status ignoring the files scan is allowed to write."""
-    excluded = [":!.rulesmith", f":!{REPORT_NAME}"]
+    excluded = [":!.rulewright", f":!{REPORT_NAME}"]
     return subprocess.run(
         ["git", "-C", str(repo), "status", "--porcelain", "--", ".", *excluded],
         capture_output=True,
@@ -54,14 +54,14 @@ def test_scan_prints_rules_with_evidence_and_changes_no_agent_file(
     assert "Import settings" in result.output
     assert "Nothing has been applied" in result.output
     assert not (recent_repo / "AGENTS.md").exists()
-    assert not (recent_repo / "rulesmith.yaml").exists()
+    assert not (recent_repo / "rulewright.yaml").exists()
     assert _git_status(recent_repo) == ""  # the working tree is untouched
 
 
 def test_scan_writes_report_and_pending_proposals(recent_repo: Path, llm: CitingLLM) -> None:
     assert _scan(recent_repo).exit_code == 0
     report = (recent_repo / REPORT_NAME).read_text(encoding="utf-8")
-    assert "# rulesmith report" in report and "## Proposed rules" in report
+    assert "# rulewright report" in report and "## Proposed rules" in report
     assert "Nothing here has been applied" in report and "refix:" in report
     pending = load_pending(recent_repo)
     assert len(pending) >= 3 and all(r.status == "proposed" for r in pending)
