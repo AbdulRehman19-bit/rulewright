@@ -21,7 +21,7 @@ Nothing is written to an agent file without approval, and only between the rules
 
 | Module | Job | State |
 |---|---|---|
-| `cli.py` | Typer app: `init`, `scan`, `apply`, `emit`, `stale` | done |
+| `cli.py` | Typer app: `init`, `scan`, `apply`, `emit`, `stale`, `prove` | done |
 | `pipeline.py` | `run_scan`: ingest, detect, dedupe, score, embed, cluster, propose, stale check; writes nothing | done |
 | `report.py` | `rulesmith-report.md` | done |
 | `pr.py` | `scan --pr`: branch, commit, push, `gh pr create`; GitHub commit URLs | done |
@@ -42,7 +42,12 @@ Nothing is written to an agent file without approval, and only between the rules
 | `rules/source.py` | rulesmith.yaml load/save, pending-proposals store | done |
 | `rules/emit/` | marker-based block replacement, one writer per target (AGENTS.md, CLAUDE.md, .cursorrules, copilot-instructions.md) | done |
 | `rules/stale.py` | dead paths, dead commands, dead scopes, silent rules | done |
-| `prove/`, `guard/` | v0.2 replay, v0.3 permission learning | reserved |
+| `prove/tasks.py` | rebuild past tasks from a rule's evidence (parent tree, prompt, known-bad lines) | done |
+| `prove/sandbox.py` | `Sandbox` interface, `DockerSandbox` (no network, no env, caps dropped, limits) | done |
+| `prove/agent.py` | `AgentRunner` interface, `BuiltinAgent` JSON-action loop | done |
+| `prove/judge.py` | workspace snapshots, deterministic recurrence check | done |
+| `prove/runner.py` | `prove_rule`: both arms, trials, cost ceiling, LLM-judge fallback, report | done |
+| `guard/` | v0.3 permission learning | reserved |
 | `store.py` | SQLite cache in `.rulesmith/` (embeddings table) | embeddings done; signals and rule history later |
 
 ## How the finished pieces work
@@ -66,12 +71,13 @@ Nothing is written to an agent file without approval, and only between the rules
 - **Scan** (`rulesmith scan`): reads N commits (default 500) and Claude Code session logs, runs the detectors, keeps one signal per (agent commit, later commit) pair, scores, embeds, clusters. Fewer than 3 clusters means the cold-start message and no LLM call. Otherwise up to 10 clusters not already covered by a rule in rulesmith.yaml go to the LLM; the cost estimate is shown first and a paid call needs a yes (`--yes` skips the question; local models are free and never ask). It prints a Rich table (flagged rules red), writes `rulesmith-report.md`, and stores the proposals in `.rulesmith/pending.json` (replacing the previous list). It changes no agent file and not rulesmith.yaml.
 - **`--pr`**: puts the guard-approved rules (no risk flags) on a branch `rulesmith/rules-<timestamp>` with rulesmith.yaml and the target files, pushes it and opens a pull request with `gh`. The PR is the approval step. It refuses if the files it would edit have uncommitted changes or broken markers, and returns to the original branch. A missing remote or `gh` is reported as a note.
 - **Report**: counts, the cold-start message, each rule with scope, risk flags and evidence as commit links (GitHub repos), dropped clusters and stale rules. It contains SHAs and signal kinds, never mined text.
+- **Prove** (`rulesmith prove <rule-id>`): re-mines the history to find the rule's evidence commits and, for each, the lines the human fix removed (the mistake). A task is the agent commit's parent tree (`git archive`, no history, so the fix is not visible), a prompt taken from the agent commit's message (attribution lines removed) and those bad lines. Up to 10 tasks. For each task and trial it runs two arms on fresh copies: without the rule and with the rule in the agent's system prompt. After a cost estimate (free for local models; a paid run asks first; `--max-cost` stops the run at the ceiling) each run goes: temp copy, Docker container (no network, no environment variables, all capabilities dropped, no-new-privileges, 1 GB memory, 1 CPU, 256 processes, commands killed after 60 s, image `python:3.12-slim`), built-in agent loop, then the judge. The agent loop runs on the host so the API key never enters the container; the container only executes the agent's file and shell actions. File reads and writes go through the container, never host-side, and host snapshots skip symlinks. The judge is deterministic when the evidence shows the mistake (the agent wrote one of the removed lines), otherwise an LLM judge decides. The report shows, per arm, recurrences out of judged runs, runs that changed files (so "did nothing" is not mistaken for "avoided the mistake"), runs that failed (excluded) and cost, and is saved to `.rulesmith/prove/<rule-id>.json`.
 - **Tests**: `tests/fixtures/build_repos.py` builds throwaway repos with planted patterns and negative cases; transcripts are generated in tmp dirs; tests assert detectors find exactly the planted signals.
 
 ## What is used
 
 Python 3.11+, Typer + Rich (CLI), Pydantic v2 (models), PyYAML (rulesmith.yaml), git via subprocess, hatchling (build), uv (dev), pytest, ruff, mypy (strict), GitHub Actions on Python 3.11-3.13.
-CI also publishes to PyPI on `v*` tags (trusted publishing). Also now: sentence-transformers (torch), scikit-learn HDBSCAN, numpy, SQLite. LiteLLM (lazy import).  Planned: SQLite, PyYAML; v0.2 Docker (docker-py).
+CI also publishes to PyPI on `v*` tags (trusted publishing). Also now: docker (docker-py), sentence-transformers (torch), scikit-learn HDBSCAN, numpy, SQLite. LiteLLM (lazy import).  Planned: SQLite, PyYAML; v0.2 Docker (docker-py).
 
 ## Phases
 
@@ -89,5 +95,5 @@ Week 1 = phases 0-1, week 2 = phase 2 plus embeddings/clustering (phase 3), week
 | 6 Ship v0.1 | `scan`, Rich table, rulesmith-report.md, `--pr`, injection tests, README; real-repo check on litellm, tldraw (done, found and fixed 4 bugs) | code done; launch gate partly done |
 
 Launch gate for v0.1 (not done): run `scan` on 3 public repos that have agent co-authored commits and read the output by hand; record the GIF; confirm the name on PyPI and GitHub and configure the PyPI trusted publisher; replace the placeholder address in SECURITY.md.
-| 7 v0.2 prove | rebuild tasks, cost estimate/`--max-cost`, Docker sandbox, AgentRunner, judge, before/after report | later |
+| 7 v0.2 prove | rebuild tasks, cost estimate/`--max-cost`, Docker sandbox, AgentRunner, judge, before/after report | code done and tested against real containers; real-model replay in progress (see D70) |
 | 8 v0.3 guard | permission profiler, allowlist emitter, `guard --diff`, Codex reader | later |

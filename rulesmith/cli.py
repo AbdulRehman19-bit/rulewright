@@ -1,4 +1,5 @@
 import os
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -11,16 +12,24 @@ from rulesmith.cluster.embed import Embedder, SentenceTransformerEmbedder
 from rulesmith.config import load_config
 from rulesmith.ingest.git_history import read_commits
 from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource
-from rulesmith.mine.detectors import detect_corrections, detect_refixes, detect_reverts
+from rulesmith.mine.detectors import (
+    dedupe_signals,
+    detect_corrections,
+    detect_refixes,
+    detect_reverts,
+)
 from rulesmith.pipeline import run_scan
 from rulesmith.pr import PRError, create_pr
 from rulesmith.propose.llm import (
     CostEstimate,
     LiteLLMClient,
-    LLMClient,
     ollama_models,
     pick_model,
 )
+from rulesmith.prove.agent import BuiltinAgent
+from rulesmith.prove.runner import ProveReport, estimate_runs, prove_rule
+from rulesmith.prove.sandbox import DEFAULT_IMAGE, DockerSandbox, Sandbox
+from rulesmith.prove.tasks import MAX_TASKS, build_tasks
 from rulesmith.report import REPORT_NAME, render_report
 from rulesmith.rules.emit import MarkerError, plan_emit, write_changes
 from rulesmith.rules.model import Rule
@@ -90,7 +99,7 @@ def _make_embedder() -> Embedder:
     return SentenceTransformerEmbedder()
 
 
-def _make_client(model: str | None) -> LLMClient | None:
+def _make_client(model: str | None) -> LiteLLMClient | None:
     chosen = model or pick_model(os.environ, ollama_models())
     return LiteLLMClient(chosen) if chosen else None
 
@@ -107,6 +116,9 @@ def scan(
     commits: Annotated[int | None, typer.Option(help="How many recent commits to read.")] = None,
     model: Annotated[str | None, typer.Option(help="LiteLLM model, e.g. ollama/llama3.1.")] = None,
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask before a paid LLM call.")] = False,
+    judge: Annotated[
+        bool, typer.Option("--judge/--no-judge", help="Second LLM call that drops generic rules.")
+    ] = True,
     pr: Annotated[
         bool, typer.Option("--pr", help="Open a pull request with the guard-approved rules.")
     ] = False,
@@ -133,7 +145,7 @@ def scan(
 
         result = run_scan(
             repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
-            sessions=[ClaudeCodeSource()], progress=progress,
+            sessions=[ClaudeCodeSource()], progress=progress, judge=judge,
         )  # fmt: skip
 
     kinds = ", ".join(sorted({s.kind for s in result.signals}))
@@ -277,3 +289,101 @@ def stale(
         save_rules(repo, rules_file)
         marked = len({f.rule_id for f in findings})
         console.print(f"Marked {marked} rule(s) stale; run `rulesmith emit`.")
+
+
+def _docker_problem() -> str | None:
+    """Why the sandbox cannot be used, or None when Docker is reachable."""
+    try:
+        import docker
+
+        docker.from_env().ping()
+    except Exception as e:  # the SDK raises several types; all mean the same to the user
+        return f"Docker is not available ({type(e).__name__}). Start Docker Desktop or the daemon."
+    return None
+
+
+def _make_sandbox_factory(image: str) -> Callable[[Path], Sandbox]:
+    return lambda work: DockerSandbox(work, image)
+
+
+def _rate(report: ProveReport, arm: str) -> str:
+    rate = report.rate(arm)
+    if rate is None:
+        return "no judged runs"
+    return f"{report.recurrences(arm)}/{len(report.judged(arm))} ({rate:.0%})"
+
+
+@app.command()
+def prove(
+    rule_id: Annotated[str, typer.Argument(help="Id of an accepted rule in rulesmith.yaml.")],
+    repo: RepoOption = Path("."),
+    tasks: Annotated[int, typer.Option(help="Past tasks to replay (at most 10).")] = 10,
+    trials: Annotated[int, typer.Option(help="Repeat each task this many times.")] = 1,
+    max_cost: Annotated[float | None, typer.Option(help="Stop before spending more (USD).")] = None,
+    model: Annotated[str | None, typer.Option(help="LiteLLM model for the agent.")] = None,
+    image: Annotated[str, typer.Option(help="Docker image the agent works in.")] = DEFAULT_IMAGE,
+    commits: Annotated[int, typer.Option(help="History to search for the evidence.")] = 2000,
+    yes: Annotated[bool, typer.Option("--yes", help="Do not ask before a paid run.")] = False,
+) -> None:
+    """Replay past tasks with and without a rule and report how often the mistake recurs."""
+    rule = _load(repo).get(rule_id)
+    if rule is None:
+        raise _fail(f"No rule {rule_id} in {FILENAME}.", 2)
+    history = read_commits(repo, commits)
+    signals = dedupe_signals(detect_reverts(history) + detect_refixes(history))
+    chosen = build_tasks(rule, history, signals, min(tasks, MAX_TASKS))
+    if not chosen:
+        raise _fail(
+            f"None of the evidence commits for {rule_id} is in the last {commits} commits; "
+            "try a larger --commits."
+        )
+    client = _make_client(model)
+    if client is None:
+        raise _fail("No LLM available: start Ollama, set GROQ_API_KEY or similar, or use --model.")
+    if (problem := _docker_problem()) is not None:
+        raise _fail(problem)
+
+    runs = len(chosen) * trials * 2
+    tokens_in, tokens_out, usd = estimate_runs(client.model, runs)
+    price = "unknown price" if usd is None else f"about ${usd:.2f}"
+    console.print(
+        f"{len(chosen)} task(s) x 2 arms x {trials} trial(s) = {runs} agent runs with "
+        f"{client.model}: ~{tokens_in:,} tokens in, ~{tokens_out:,} out, {price}."
+    )
+    if max_cost is not None and usd is not None and usd > max_cost:
+        console.print(f"[yellow]The estimate is above --max-cost ${max_cost:.2f}; "
+                      "the run will stop at the ceiling.[/yellow]")  # fmt: skip
+    if usd != 0.0 and not yes and not typer.confirm("Proceed with the paid runs?"):
+        raise _fail("Cancelled before any run.", 0)
+
+    with console.status("Replaying tasks in the sandbox...") as status:
+
+        def progress(i: int, n: int) -> None:
+            status.update(f"Agent run {i} of {n} (each in a fresh container)...")
+
+        report = prove_rule(
+            rule, chosen, repo, BuiltinAgent(client), _make_sandbox_factory(image), trials,
+            max_cost, judge_client=client, progress=progress,
+        )  # fmt: skip
+
+    table = Table("", "without the rule", "with the rule", title=f"{rule.id}: {rule.text}")
+    table.add_row("mistake recurred", _rate(report, "without"), _rate(report, "with"))
+    table.add_row(
+        "runs that changed files", str(report.changed("without")), str(report.changed("with"))
+    )
+    console.print(table)
+    cost = "unknown" if report.cost_usd is None else f"${report.cost_usd:.4f}"
+    console.print(f"{len(report.records)} run(s), approximate cost {cost}.")
+    if report.aborted:
+        console.print(f"[yellow]{report.aborted}; results are partial.[/yellow]")
+    errors = [r for r in report.records if r.error]
+    if errors:
+        first = errors[0].error
+        console.print(f"[yellow]{len(errors)} run(s) failed and are not counted: {first}[/yellow]")
+    console.print(
+        "[dim]Evidence, not proof: a handful of tasks, nondeterministic agents and "
+        "prompts rebuilt from commit messages.[/dim]"
+    )
+    out = repo / ".rulesmith" / "prove"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"{rule.id}.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")

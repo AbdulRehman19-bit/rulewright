@@ -212,3 +212,40 @@ Found: a local 7B model wrote generic rules from real clusters ("Import necessar
 **D59. Result of the second real LLM run (litellm, 2000 commits, `qwen2.5-coder:7b`, top 3 of 15 clusters).**
 Evidence is now correct: every cited commit is distinct (9, 10 and 6 commits). But the 7B model still wrote generic rules ("Import necessary modules at the top of each file", "Ensure all imports are grouped and sorted alphabetically within each file", "Ensure consistent formatting of cost-related data in JSON files") and did not abstain. So on a busy real repository the mining and clustering are usable, but rule quality is limited by the model, and this model is not good enough for launch-quality output. Not tested: a larger model (no API key was available in this session). Before launch, run `--model` with a stronger model on three public repos and keep a rule worth showing in the README; until then the README example is from a demo repo.
 Also not done: pydantic-ai was cloned but not scanned (only 8 Claude trailers in its last 500 commits); the check covered litellm and tldraw. tldraw at 2000 commits gave 3 distinct-commit clusters at most, so it falls under cold start for LLM purposes.
+
+## Phase 6c: Rule quality and Groq
+
+**D60. Groq is supported through LiteLLM; auto-selection prefers it among API keys.**
+`GROQ_API_KEY` selects `groq/llama-3.3-70b-versatile`. Order: a running local Ollama, then Groq, Anthropic, OpenAI; `--model` always wins. Groq goes first among keys because the 70B open model is far stronger than the local 7B that produced generic rules (D59) and has a free tier, but the cost estimate is still shown first and any non-free model asks before running. Calls now retry 3 times (free tiers return rate-limit errors) and time out after 120 s (local models 900 s, since a 7B on CPU needs minutes per call). Not verified against the real Groq API: no key was available in the session; the unit tests cover selection and pricing only.
+
+**D61. A second "judge" call drops generic rules (`--judge`, on by default).**
+Why: the first prompt asks for specific rules but a weak model ignores that. A separate call sees the proposed rule and the evidence and answers whether the rule names something concrete from the evidence that would not apply to most codebases. Generic rules are dropped with the reason "judged generic: ...". It doubles the calls and is included in the cost estimate. Fail-open: an unreadable or failed judge keeps the rule, because a flaky judge should not discard evidence-backed rules. The rule text goes into the judge's data block too, since it is model output derived from hostile text. `--no-judge` skips it.
+
+**D62. The prompt now leads each item with `human_fix`.**
+The removed and added lines are the mistake itself; the model is told to base the rule on what the fixes have in common (this replaces the old `diff_excerpt` key).
+
+**D63. A failed LLM call drops one cluster, never the scan.**
+Found by a real run: the new 180 s timeout hit the local 7B model, the exception was not caught, and `scan` crashed with a traceback after minutes of work. Now a timeout, rate limit or auth error is reported as "LLM call failed (TimeoutError): ..." for that cluster and the rest continue; a judge failure keeps the rule.
+
+## Phase 7: v0.2 `prove`
+
+**D64. The agent loop runs on the host; only its tool calls run in the container.**
+Why: the spec says replays run with the network off (or limited to the model API) and no host secrets. With a host-side loop the container can have no network at all and the API key never enters it. Cost: the agent cannot reach package registries, so it cannot install dependencies.
+
+**D65. File access goes through the container; the host only snapshots regular files.**
+An agent can create a symlink in the bind-mounted copy. Reading or writing through the host would follow it to host paths, so reads use `head` in the container, writes use a tar archive into the container, and the judge's snapshot skips symlinks, `.git`, binary and huge files. The old tree is extracted with the tar `data` filter, which refuses absolute paths and links outside the destination. Container limits: no network, no environment variables, all capabilities dropped, no-new-privileges, 1 GB, 1 CPU, 256 processes, commands killed after 60 s, container removed after each run. Each of these has a test against a real container (network blocked, secrets absent, capabilities zero, runaway killed, memory cap, container removed).
+
+**D66. Tasks are rebuilt from evidence commits: parent tree, commit message, known-bad lines.**
+The agent gets only the parent's files (`git archive`, no history) so the fix is not visible. The prompt is the agent commit's message minus attribution lines (the spec also lists linked issues and the first session message; not implemented). The mistake is the set of lines the human fix removed, re-mined from history, so `prove` needs the evidence commits to be within `--commits` (default 2000). Honest limit: a commit message can describe the solution, and a reconstructed prompt is not the original.
+
+**D67. The judge is deterministic first, an LLM second, and "did nothing" is shown.**
+A run recurred if the agent wrote one of the removed lines (whitespace ignored; lines under 4 characters are too weak to identify anything). With no known bad lines an LLM judge reads the rule, the task and the added lines. Runs that failed (model error, timeout) are excluded from the rates, and each arm shows how many runs changed any file, because an agent that does nothing "avoids" the mistake trivially.
+
+**D68. Cost: an estimate before, a ceiling during.**
+Estimate = runs x 8 assumed steps x 3000 tokens in and 250 out, priced through LiteLLM (free for Ollama, unknown price shown as such). `--max-cost` is checked before each run, so it can be overshot by at most one run. A paid run asks first; `--yes` skips the question.
+
+**D69. Default sandbox image is `python:3.12-slim`; `--image` overrides it.**
+It has `sh`, `timeout` and Python and is small, but not the repository's own toolchain, and there is no network to install one. So the agent can edit files and run basic commands, but not the project's tests unless the image already has what they need. The built-in agent is simple on purpose (JSON actions as text, no native tool calling) so any model works; stronger agents such as Claude Code headless would plug in behind `AgentRunner` and are not implemented.
+
+**D70. First real replay (demo repo, `qwen2.5-coder:7b` as the agent, real Docker, 1 task, 1 trial).**
+Both arms finished in 4 steps. Recurrence was 0/1 without the rule and 0/1 with it, so nothing can be concluded from it; the useful signal was in the other row: the without-rule run changed files and the with-rule run changed none, which is exactly the "agent did nothing" case D67 reports separately. What it shows: the whole chain works with a real model (task rebuild, container, JSON-action loop, judge, report). What it does not show: that a rule helps. That needs more tasks and trials, a stronger agent model, and real repositories; it was not done in this session.

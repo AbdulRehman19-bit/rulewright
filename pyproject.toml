@@ -14,6 +14,7 @@ dependencies = [
     "sentence-transformers>=3",
     "litellm>=1.50",
     "pyyaml>=6.0.3",
+    "docker>=7",
 ]
 
 [project.scripts]
@@ -49,5 +50,5 @@ plugins = ["pydantic.mypy"]
 testpaths = ["tests"]
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "sentence_transformers.*"]
+module = ["sklearn.*", "sentence_transformers.*", "docker.*"]
 ignore_missing_imports = true

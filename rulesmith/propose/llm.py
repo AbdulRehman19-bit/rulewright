@@ -8,6 +8,10 @@ from typing import Protocol
 from pydantic import BaseModel
 
 OLLAMA_URL = "http://localhost:11434"
+GROQ_MODEL = "groq/llama-3.3-70b-versatile"
+REQUEST_TIMEOUT = 120  # seconds; a stuck hosted call should fail, not hang the scan
+LOCAL_TIMEOUT = 900  # a 7B model on a CPU needs minutes per call
+RETRIES = 3  # rate limits (HTTP 429) are common on free tiers
 COMPLETION_TOKENS = 200  # a rule is under 30 words plus a little JSON
 CHARS_PER_TOKEN = 4
 
@@ -28,9 +32,15 @@ def ollama_models(url: str = OLLAMA_URL, timeout: float = 0.5) -> list[str]:
 
 
 def pick_model(env: Mapping[str, str], local_models: list[str]) -> str | None:
-    """Local Ollama model if present, otherwise the user's own API key. None when neither."""
+    """Local Ollama model if present, otherwise the user's own API key. None when neither.
+
+    Among keys: Groq first (large open models, fast, has a free tier), then Anthropic, OpenAI.
+    `--model` always overrides this.
+    """
     if local_models:
         return f"ollama/{local_models[0]}"
+    if env.get("GROQ_API_KEY"):
+        return GROQ_MODEL
     if env.get("ANTHROPIC_API_KEY"):
         return "anthropic/claude-haiku-5-5"
     if env.get("OPENAI_API_KEY"):
@@ -38,20 +48,35 @@ def pick_model(env: Mapping[str, str], local_models: list[str]) -> str | None:
     return None
 
 
+class ChatClient(Protocol):
+    """Multi-turn access, for agents. `messages` alternate user and assistant turns."""
+
+    model: str
+
+    def chat(self, system: str, messages: list[dict[str, str]], max_tokens: int) -> str: ...
+
+
 class LiteLLMClient:
     def __init__(self, model: str) -> None:
         self.model = model
 
-    def complete(self, system: str, user: str) -> str:
+    def chat(
+        self, system: str, messages: list[dict[str, str]], max_tokens: int = COMPLETION_TOKENS * 2
+    ) -> str:
         import litellm  # slow import, load lazily
 
         response = litellm.completion(
             model=self.model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            messages=[{"role": "system", "content": system}, *messages],
             temperature=0,
-            max_tokens=COMPLETION_TOKENS * 2,
+            timeout=LOCAL_TIMEOUT if self.model.startswith("ollama/") else REQUEST_TIMEOUT,
+            num_retries=RETRIES,
+            max_tokens=max_tokens,
         )
         return str(response.choices[0].message.content or "")
+
+    def complete(self, system: str, user: str) -> str:
+        return self.chat(system, [{"role": "user", "content": user}], COMPLETION_TOKENS * 2)
 
 
 class CostEstimate(BaseModel):
@@ -62,7 +87,7 @@ class CostEstimate(BaseModel):
     usd: float | None  # None when the model's price is unknown; 0.0 for local models
 
 
-def _litellm_price(model: str, tokens_in: int, tokens_out: int) -> float | None:
+def litellm_price(model: str, tokens_in: int, tokens_out: int) -> float | None:
     import litellm
 
     try:
@@ -77,7 +102,7 @@ def _litellm_price(model: str, tokens_in: int, tokens_out: int) -> float | None:
 def estimate_cost(
     model: str,
     prompts: list[tuple[str, str]],
-    pricer: Callable[[str, int, int], float | None] = _litellm_price,
+    pricer: Callable[[str, int, int], float | None] = litellm_price,
 ) -> CostEstimate:
     """Estimate before any paid call. Tokens are approximated as characters / 4."""
     tokens_in = sum((len(s) + len(u)) // CHARS_PER_TOKEN for s, u in prompts)

@@ -27,11 +27,13 @@ rulesmith scan            # read the last 500 commits, print proposed rules, cha
 rulesmith apply r-3e6f373f r-5f86d161    # accept chosen rules, write rulesmith.yaml and agent files
 rulesmith emit --dry-run  # preview re-rendering every agent file from rulesmith.yaml
 rulesmith stale           # rules that mention paths or commands that no longer exist
+rulesmith prove r-3e6f373f  # replay past tasks with and without the rule (needs Docker)
 ```
 
 Mining and clustering run locally with no API key. Only the last step, writing the rule text,
-calls an LLM: a local Ollama model if one is running, otherwise your own `ANTHROPIC_API_KEY` or
-`OPENAI_API_KEY`. The estimated cost is shown, and you are asked, before any paid call.
+calls an LLM: a local Ollama model if one is running, otherwise your own `GROQ_API_KEY`,
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` (or pick one with `--model`, any LiteLLM name such as
+`groq/llama-3.3-70b-versatile`). The estimated cost is shown, and you are asked, before any paid call.
 
 ## What a result looks like
 
@@ -47,9 +49,10 @@ Read 45 commits (15 agent-authored); 15 signal(s) [refix] in 3 cluster(s).
 `rulesmith-report.md` lists the evidence behind each rule as commit links.
 
 **Rule quality depends on the model.** On busy real repositories a small local model (7B) wrote
-generic rules from good clusters. Judge every rule by its evidence, and for real repos use a
-stronger model: `rulesmith scan --model anthropic/claude-haiku-5-5` (your own API key; the
-cost is shown first).
+generic rules from good clusters. A second check asks the model whether each rule is specific or
+generic advice and drops the generic ones (`--no-judge` skips it), but judge every rule by its
+evidence, and for real repos use a stronger model, for example
+`rulesmith scan --model groq/llama-3.3-70b-versatile` with your own key (the cost is shown first).
 
 ## How it stays safe
 
@@ -69,8 +72,10 @@ See [SECURITY.md](SECURITY.md).
 ## Roadmap
 
 - **v0.1** `scan`, `apply`, `emit`, `stale`: this release.
-- **v0.2** `prove`: replay past tasks in a Docker sandbox with and without a rule and report how
-  often the mistake recurs. Results are evidence, not statistical proof.
+- **v0.2** `prove` (implemented, pre-release): replay past tasks in a Docker sandbox (no network,
+  no secrets) with and without a rule and report how often the mistake recurs. Results are
+  evidence, not statistical proof: a handful of tasks, nondeterministic agents, and prompts rebuilt
+  from commit messages. The built-in agent is simple; its runs are only as good as the model.
 - **v0.3** `guard`: learn a least-privilege permission allowlist from the same session logs.
 
 How it works and why each choice was made: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),

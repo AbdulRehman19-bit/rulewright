@@ -55,7 +55,8 @@ def test_three_patterns_give_evidenced_rules(clean_repo: Path) -> None:
     llm = CitingLLM()
     result = _scan(clean_repo, llm)
     assert result.cold_start is None and len(result.clusters) >= 3
-    assert result.proposals is not None and len(result.proposals.rules) == len(llm.prompts) >= 3
+    assert result.proposals is not None and len(result.proposals.rules) == len(llm.drafts) >= 3
+    assert len(llm.judgements) == len(llm.drafts)  # every rule is judged once
     for rule in result.proposals.rules:
         assert len(rule.evidence) >= 3 and rule.risk_flags == []
         assert all(len(e.commit_sha) == 40 for e in rule.evidence)
@@ -88,7 +89,7 @@ def test_cancelled_cost_confirmation_makes_no_llm_call(clean_repo: Path) -> None
         return False
 
     result = run_scan(clean_repo, 500, FakeEmbedder(), llm, RulesFile(), NOW, refuse)
-    assert seen and seen[0].model == "anthropic/paid" and seen[0].calls >= 3
+    assert seen and seen[0].model == "anthropic/paid" and seen[0].calls >= 6  # draft + judge
     assert llm.prompts == [] and result.proposals is None
     assert any("Cancelled" in n for n in result.notes)
 
