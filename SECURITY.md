@@ -1,6 +1,8 @@
 # Security
 
-Report vulnerabilities to security@rulesmith.invalid (placeholder: replace before release).
+Report vulnerabilities privately through GitHub: open
+[a security advisory](https://github.com/AbdulRehman19-bit/rulesmith/security/advisories/new)
+on this repository. Please do not file a public issue for a vulnerability.
 
 ## Threat model
 
