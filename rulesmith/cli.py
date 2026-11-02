@@ -128,17 +128,21 @@ def scan(
     existing = _load(repo)
     now = datetime.now(UTC)
 
-    def confirm(estimate: CostEstimate) -> bool:
-        price = "unknown price" if estimate.usd is None else f"about ${estimate.usd:.4f}"
-        console.print(
-            f"LLM: {estimate.model}, {estimate.calls} call(s), ~{estimate.tokens_in} tokens in, "
-            f"~{estimate.tokens_out} out: {price}"
-        )
-        if estimate.usd == 0.0 or yes:
-            return True
-        return typer.confirm("Proceed with the paid call?")
+    with console.status("Starting...") as status:
 
-    with console.status("Reading history and clustering mistakes...") as status:
+        def confirm(estimate: CostEstimate) -> bool:
+            price = "unknown price" if estimate.usd is None else f"about ${estimate.usd:.4f}"
+            status.stop()  # a live spinner hides the prompt, so the scan looks stuck
+            try:
+                console.print(
+                    f"LLM: {estimate.model}, {estimate.calls} call(s), ~{estimate.tokens_in} "
+                    f"tokens in, ~{estimate.tokens_out} out: {price}"
+                )
+                if estimate.usd == 0.0 or yes:
+                    return True
+                return typer.confirm("Proceed with the paid call?")
+            finally:
+                status.start()
 
         def progress(i: int, n: int) -> None:
             status.update(f"Writing rule {i} of {n} with the LLM (a local model can be slow)...")
@@ -146,6 +150,7 @@ def scan(
         result = run_scan(
             repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
             sessions=[ClaudeCodeSource()], progress=progress, judge=judge,
+            stage=lambda name: status.update(name + "..."),
         )  # fmt: skip
 
     kinds = ", ".join(sorted({s.kind for s in result.signals}))

@@ -50,18 +50,23 @@ def run_scan(
     sessions: list[SessionSource] | None = None,
     progress: Callable[[int, int], None] | None = None,
     judge: bool = True,
+    stage: Callable[[str], None] = lambda _name: None,
 ) -> ScanResult:
+    stage(f"Reading {commits} commits of git history")
     history = read_commits(repo, commits)
     agent_commits = sum(1 for c in history if c.is_agent)
     notes: list[str] = []
 
+    stage(f"Looking for reverts and re-fixes in {len(history)} commits")
     signals = detect_reverts(history) + detect_refixes(history)
     for source in sessions or []:
+        stage("Reading agent session logs")
         signals += detect_corrections(source.read(repo))
     signals = score_signals(dedupe_signals(signals), now)
 
     clusters: list[Cluster] = []
     if signals:
+        stage(f"Embedding and clustering {len(signals)} signals (first run loads the model)")
         conn = open_store(repo)
         try:
             clusters = cluster_signals(signals, embed_signals(signals, embedder, conn))
