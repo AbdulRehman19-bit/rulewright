@@ -88,3 +88,50 @@ def test_one_commit_with_many_fixes_is_not_a_repeated_mistake() -> None:
         for i, s in enumerate(sigs)
     ]
     assert cluster_signals(two_commits, embed_signals(two_commits, FakeEmbedder())) == []
+
+
+# --- coherence ----------------------------------------------------------------------------
+
+
+def _csig(i: int, excerpt: str) -> Signal:
+    from datetime import UTC, datetime
+
+    from rulewright.mine.signals import Signal
+
+    return Signal(
+        id=f"s{i}", kind="refix", commit_sha=f"{i:040d}", files=["a.py"], diff_excerpt=excerpt,
+        text="t", author_is_agent=True, score=0.8, ts=datetime(2026, 1, 1, tzinfo=UTC),
+    )  # fmt: skip
+
+
+def test_coherence_is_high_when_the_same_names_keep_changing() -> None:
+    from rulewright.cluster.group import coherence
+
+    same = [_csig(i, "- import settings_loader\n+ import config_loader") for i in range(3)]
+    unrelated = [
+        _csig(0, "- alpha_value = compute_total(items)"),
+        _csig(1, "- render_banner(user_name)"),
+        _csig(2, "- retry_budget = parse_header(raw)"),
+    ]
+    assert coherence(same) == 1.0
+    assert coherence(unrelated) < 0.1
+    assert coherence([_csig(0, "x")]) == 0.0  # one signal has nothing to compare
+
+
+def test_select_clusters_skips_incoherent_ones_and_ranks_by_coherence() -> None:
+    from rulewright.cluster.group import Cluster
+    from rulewright.pipeline import select_clusters
+
+    def cluster(cid: str, sigs: list[Signal]) -> Cluster:
+        return Cluster(id=cid, signal_ids=[s.id for s in sigs], centroid=[0.0], summary="x",
+                       size=len(sigs))  # fmt: skip
+
+    tight = [_csig(i, "- import settings_loader") for i in range(3)]
+    loose = [_csig(10 + i, f"- unique_name_{i} = other_thing_{i}()") for i in range(5)]
+    mid = [_csig(20, "- shared_name one_a"), _csig(21, "- shared_name two_b"),
+           _csig(22, "- shared_name three_c")]  # fmt: skip
+    clusters = [cluster("c-loose", loose), cluster("c-mid", mid), cluster("c-tight", tight)]
+    chosen, skipped = select_clusters(clusters, tight + loose + mid, set())
+    assert [c.id for c in chosen] == ["c-tight", "c-mid"] and skipped == 1
+    only, _ = select_clusters(clusters, tight + loose + mid, {"r-tight"})
+    assert [c.id for c in only] == ["c-mid"]  # a rule that already exists is not asked for again

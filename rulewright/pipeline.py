@@ -7,7 +7,13 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from rulewright.cluster.embed import Embedder, embed_signals
-from rulewright.cluster.group import Cluster, cluster_signals, cold_start_message
+from rulewright.cluster.group import (
+    COHERENCE_FLOOR,
+    Cluster,
+    cluster_signals,
+    coherence,
+    cold_start_message,
+)
 from rulewright.ingest.git_history import read_commits
 from rulewright.ingest.sessions.base import SessionSource
 from rulewright.mine.detectors import (
@@ -37,6 +43,28 @@ class ScanResult(BaseModel):
     stale: list[StaleFinding]
     cold_start: str | None
     notes: list[str]
+
+
+def select_clusters(
+    clusters: list[Cluster], signals: list[Signal], known_rule_ids: set[str]
+) -> tuple[list[Cluster], int]:
+    """The clusters worth an LLM call, best first, and how many were skipped as incoherent.
+
+    Ranked by how much their changes have in common, then by distinct commits (many signals from
+    one commit are one occurrence), so the limit keeps the most promising clusters, not the
+    largest.
+    """
+    by_id = {s.id: s for s in signals}
+    scored = []
+    for c in clusters:
+        if "r-" + c.id.removeprefix("c-") in known_rule_ids:
+            continue
+        members = [by_id[i] for i in c.signal_ids if i in by_id]
+        commits = len({s.commit_sha or s.id for s in members})
+        scored.append((coherence(members), commits, c))
+    keep = [t for t in scored if t[0] >= COHERENCE_FLOOR]
+    keep.sort(key=lambda t: (-round(t[0], 2), -t[1], -t[2].size, t[2].id))
+    return [c for _, _, c in keep][:MAX_RULES], len(scored) - len(keep)
 
 
 def run_scan(
@@ -72,16 +100,12 @@ def run_scan(
             clusters = cluster_signals(signals, embed_signals(signals, embedder, conn))
         finally:
             conn.close()
-    known = {r.id for r in existing.rules}
-    commit_of = {s.id: s.commit_sha or s.id for s in signals}
-
-    def occurrences(c: Cluster) -> int:  # many signals from one commit are one occurrence
-        return len({commit_of[i] for i in c.signal_ids if i in commit_of})
-
-    fresh = sorted(
-        (c for c in clusters if "r-" + c.id.removeprefix("c-") not in known),
-        key=lambda c: (-occurrences(c), -c.size, c.id),
-    )[:MAX_RULES]
+    fresh, incoherent = select_clusters(clusters, signals, {r.id for r in existing.rules})
+    if incoherent:
+        notes.append(
+            f"Skipped {incoherent} cluster(s) whose changes share little in common "
+            "(unrelated edits that only look alike)."
+        )
 
     cold_start = cold_start_message(len(clusters), commits)
     if agent_commits == 0:

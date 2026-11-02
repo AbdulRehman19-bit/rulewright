@@ -1,6 +1,8 @@
 """HDBSCAN clustering of signal embeddings: one cluster is one candidate rule."""
 
 import hashlib
+import itertools
+import re
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,6 +14,11 @@ from rulewright.store import Vector
 
 MIN_CLUSTER_SIZE = 3  # spec: only clusters of 3+ signals become rules
 MIN_CLUSTERS = 3  # spec: fewer than this triggers the cold-start message
+# A cluster whose changes share fewer names than this is unrelated edits that merely look alike
+# (import fixes after files move). On litellm it kept all 3 clusters judged good by hand and
+# dropped 6 of 7 judged weak; 10 clusters is a small sample, so the floor is kept low.
+COHERENCE_FLOOR = 0.10
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 
 
 class Cluster(BaseModel):
@@ -20,6 +27,16 @@ class Cluster(BaseModel):
     centroid: list[float]
     summary: str  # text of the signal closest to the centroid
     size: int
+
+
+def coherence(signals: list[Signal]) -> float:
+    """Mean pairwise overlap (Jaccard) of the identifiers in what each signal changed, 0 to 1.
+
+    A repeated mistake keeps touching the same names; unrelated churn does not.
+    """
+    names = [set(_IDENTIFIER.findall(s.diff_excerpt or s.text)) for s in signals]
+    pairs = [len(a & b) / len(a | b) for a, b in itertools.combinations(names, 2) if a | b]
+    return sum(pairs) / len(pairs) if pairs else 0.0
 
 
 def cluster_signals(
