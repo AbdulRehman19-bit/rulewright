@@ -377,3 +377,71 @@ def test_local_models_get_a_longer_timeout() -> None:
     from rulesmith.propose.llm import LOCAL_TIMEOUT, REQUEST_TIMEOUT
 
     assert LOCAL_TIMEOUT > 5 * REQUEST_TIMEOUT
+
+
+# --- rate limits and reasoning models -----------------------------------------------------
+
+
+def test_retry_delay_follows_the_servers_hint_and_is_capped() -> None:
+    from rulesmith.propose import llm
+
+    assert llm.retry_delay("Please try again in 7.5s.", 1) == 8.5
+    assert llm.retry_delay("try again in 1m3.2s", 1) == 64.2
+    assert llm.retry_delay("try again in 2m10s", 1) == llm.MAX_WAIT
+    assert llm.retry_delay("no hint here", 2) == 20.0
+    assert llm.retry_delay("no hint here", 99) == llm.MAX_WAIT
+
+
+def _fake_litellm(monkeypatch, fail_times: int, seen: list[dict]):  # type: ignore[no-untyped-def]
+    import types
+
+    class RateLimitError(Exception):
+        pass
+
+    state = {"left": fail_times}
+
+    def completion(**kw):  # type: ignore[no-untyped-def]
+        seen.append(kw)
+        if state["left"] > 0:
+            state["left"] -= 1
+            raise RateLimitError("Rate limit reached, please try again in 2s")
+        msg = types.SimpleNamespace(content='{"ok": true}')
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=msg)])
+
+    fake = types.SimpleNamespace(
+        completion=completion, exceptions=types.SimpleNamespace(RateLimitError=RateLimitError)
+    )
+    monkeypatch.setitem(__import__("sys").modules, "litellm", fake)
+
+
+def test_a_rate_limited_call_waits_and_then_succeeds(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from rulesmith.propose import llm
+
+    waits: list[float] = []
+    monkeypatch.setattr(llm, "_sleep", waits.append)
+    seen: list[dict] = []  # type: ignore[type-arg]
+    _fake_litellm(monkeypatch, 2, seen)
+    assert llm.LiteLLMClient("groq/x").complete("s", "u") == '{"ok": true}'
+    assert waits == [3.0, 3.0] and len(seen) == 3
+
+
+def test_persistent_rate_limits_give_up_with_the_error(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import pytest
+
+    from rulesmith.propose import llm
+
+    monkeypatch.setattr(llm, "_sleep", lambda s: None)
+    _fake_litellm(monkeypatch, 99, [])
+    with pytest.raises(Exception, match="Rate limit"):
+        llm.LiteLLMClient("groq/x").complete("s", "u")
+
+
+def test_reasoning_models_get_low_effort_and_room_to_think(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from rulesmith.propose import llm
+
+    seen: list[dict] = []  # type: ignore[type-arg]
+    _fake_litellm(monkeypatch, 0, seen)
+    llm.LiteLLMClient("groq/openai/gpt-oss-120b").complete("s", "u")
+    llm.LiteLLMClient("groq/other").complete("s", "u")
+    assert seen[0]["reasoning_effort"] == "low" and seen[0]["max_tokens"] >= llm.REASONING_TOKENS
+    assert "reasoning_effort" not in seen[1] and seen[1]["max_tokens"] == llm.COMPLETION_TOKENS * 2

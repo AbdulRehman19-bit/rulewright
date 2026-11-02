@@ -1,6 +1,8 @@
 """LLM access through LiteLLM: model choice, the call itself, and a cost estimate."""
 
 import json
+import re
+import time
 import urllib.request
 from collections.abc import Callable, Mapping
 from typing import Protocol
@@ -14,6 +16,19 @@ LOCAL_TIMEOUT = 900  # a 7B model on a CPU needs minutes per call
 RETRIES = 3  # rate limits (HTTP 429) are common on free tiers
 COMPLETION_TOKENS = 200  # a rule is under 30 words plus a little JSON
 CHARS_PER_TOKEN = 4
+REASONING_TOKENS = 2000  # room for a reasoning model's thinking plus the JSON answer
+RATE_LIMIT_ATTEMPTS = 6  # free tiers cap tokens per minute; waiting is how a scan gets through
+MAX_WAIT = 75.0  # seconds, per wait
+_sleep = time.sleep
+_RETRY_HINT = re.compile(r"try again in\s+(?:(\d+)m)?\s*([\d.]+)s", re.I)
+
+
+def retry_delay(message: str, attempt: int) -> float:
+    """Seconds to wait after a rate limit: the server's own hint, else a growing guess."""
+    m = _RETRY_HINT.search(message)
+    if m:
+        return min(MAX_WAIT, int(m.group(1) or 0) * 60 + float(m.group(2)) + 1)
+    return min(MAX_WAIT, 10.0 * attempt)
 
 
 class LLMClient(Protocol):
@@ -65,15 +80,27 @@ class LiteLLMClient:
     ) -> str:
         import litellm  # slow import, load lazily
 
-        response = litellm.completion(
-            model=self.model,
-            messages=[{"role": "system", "content": system}, *messages],
-            temperature=0,
-            timeout=LOCAL_TIMEOUT if self.model.startswith("ollama/") else REQUEST_TIMEOUT,
-            num_retries=RETRIES,
-            max_tokens=max_tokens,
-        )
-        return str(response.choices[0].message.content or "")
+        extra: dict[str, object] = {}
+        if "gpt-oss" in self.model:  # reasoning model: thinking tokens count against max_tokens
+            extra = {"reasoning_effort": "low", "drop_params": True}
+            max_tokens = max(max_tokens, REASONING_TOKENS)
+        for attempt in range(1, RATE_LIMIT_ATTEMPTS + 1):
+            try:
+                response = litellm.completion(
+                    model=self.model,
+                    messages=[{"role": "system", "content": system}, *messages],
+                    temperature=0,
+                    timeout=LOCAL_TIMEOUT if self.model.startswith("ollama/") else REQUEST_TIMEOUT,
+                    num_retries=RETRIES,
+                    max_tokens=max_tokens,
+                    **extra,
+                )
+                return str(response.choices[0].message.content or "")
+            except litellm.exceptions.RateLimitError as e:
+                if attempt == RATE_LIMIT_ATTEMPTS:
+                    raise
+                _sleep(retry_delay(str(e), attempt))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def complete(self, system: str, user: str) -> str:
         return self.chat(system, [{"role": "user", "content": user}], COMPLETION_TOKENS * 2)
