@@ -80,6 +80,7 @@ class LiteLLMClient:
     ) -> str:
         import litellm  # slow import, load lazily
 
+        litellm.suppress_debug_info = True  # its "Give Feedback / Get Help" banner on every retry
         extra: dict[str, object] = {}
         if "gpt-oss" in self.model:  # reasoning model: thinking tokens count against max_tokens
             extra = {"reasoning_effort": "low", "drop_params": True}
