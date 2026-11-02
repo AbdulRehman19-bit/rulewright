@@ -69,6 +69,9 @@ class DockerSandbox:
         self._ensure_image(image)
         getuid, getgid = getattr(os, "getuid", None), getattr(os, "getgid", None)
         user = f"{getuid()}:{getgid()}" if getuid and getgid else None  # POSIX hosts only
+        # files we put in must belong to the user the container runs as, or on a Linux host they
+        # end up root-owned: the agent cannot edit them and the host cannot delete them
+        self._owner = (getuid(), getgid()) if getuid and getgid else (0, 0)
         self._container = self._client.containers.run(
             image,
             ["sleep", "86400"],
@@ -119,9 +122,11 @@ class DockerSandbox:
                     parent = posixpath.join(parent, part)
                     d = tarfile.TarInfo(parent)
                     d.type, d.mode = tarfile.DIRTYPE, 0o755
+                    d.uid, d.gid = self._owner
                     tar.addfile(d)
             info = tarfile.TarInfo(rel)
             info.size, info.mode = len(data), 0o644
+            info.uid, info.gid = self._owner
             tar.addfile(info, io.BytesIO(data))
         if not self._container.put_archive(WORKDIR, buf.getvalue()):
             raise SandboxError(f"cannot write {rel}")

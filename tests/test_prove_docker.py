@@ -97,5 +97,14 @@ def test_close_removes_the_container(tmp_path: Path) -> None:
         docker.from_env().containers.get(cid)
 
 
+def test_files_written_in_belong_to_the_container_user(sandbox: DockerSandbox) -> None:
+    sandbox.write_file("owned/dir/f.txt", "x")
+    if not hasattr(os, "getuid"):
+        pytest.skip("ownership is not mapped on this host")
+    uid = str(os.getuid())
+    owners = sandbox.exec("stat -c %u /work/owned /work/owned/dir /work/owned/dir/f.txt", 20)
+    assert owners.output.split() == [uid, uid, uid]
+
+
 def test_the_default_image_is_the_documented_one() -> None:
     assert DEFAULT_IMAGE == "python:3.12-slim" and os.name  # guards an accidental change
