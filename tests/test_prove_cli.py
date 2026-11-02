@@ -99,7 +99,7 @@ def test_evidence_outside_the_history_asks_for_more_commits(
     )])  # fmt: skip
     save_rules(repo, rf)
     out = _prove(repo, rule="r-old")
-    assert out.exit_code == 1 and "larger --commits" in out.output
+    assert out.exit_code == 1 and "larger --commits" in " ".join(out.output.split())
 
 
 def test_paid_models_are_confirmed_first_and_nothing_runs_on_no(
