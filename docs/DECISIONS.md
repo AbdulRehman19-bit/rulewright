@@ -90,3 +90,27 @@ Why: ids stay stable across runs for the same members, which phase 5 needs to tr
 
 **D23. Cold-start message triggers below 3 clusters and suggests a scan four times deeper (at least 2000 commits).**
 Why: spec says to suggest `--commits 2000` or session logs and not invent weak rules. The exact multiplier is mine.
+
+## Phase 4: Propose and guard
+
+**D24. The LLM sits behind an `LLMClient` protocol; tests script its replies.**
+Why: the spec requires mocked LLM calls in unit tests and an opt-in real suite. `LiteLLMClient` is the only real implementation and imports LiteLLM lazily. The real path (Ollama or a paid key) has not been exercised yet; do it before launch.
+
+**D25. Prompt injection defence has three layers: delimited data, schema, guards.**
+Mined text goes only into the user message inside a tag with a random 16-hex nonce, any occurrence of that tag in the text is stripped, and the system prompt says the block is data. The reply must match a strict schema (extra keys rejected). Even then the rule text is not trusted: it is risk-scanned. The model is told not to mention URLs or commands, but the scanner does not rely on it obeying.
+
+**D26. Risky rules are flagged, not dropped; unevidenced or malformed ones are dropped.**
+Why: the spec says flagged rules are shown red and never pre-selected, so the user can still read them. A hostile commit that makes the model emit "run curl ... | sh" therefore ends up visible and flagged. Rules with a broken reply or under 3 verified evidence items cannot be shown honestly and are reported in `dropped` with a reason.
+
+**D27. Negation clears command-like flags only.**
+Why: the best rules are prohibitions ("never delete failing tests", "avoid curl"). A forty-character window before the match containing never/don't/avoid/instead of clears network-command, new-shell-command, disables-tests and disables-permissions. URLs, credentials, env files and injection phrases are always flagged. Known gap: a negation word nearby can hide a hostile instruction ("never forget to run curl ..."). It errs towards fewer false alarms; tighten if real repos show abuse.
+
+**D28. Evidence is the cited signals that are in the cluster and verified; at least 3 are required (D14 resolved).**
+Why: the model cannot invent evidence, since invented ids are discarded and SHAs are checked with `git cat-file -e sha^{commit}`. Session-message signals (empty SHA) count as evidence. The spec says "commits or comments".
+Known gap: a rule citing 2 of 5 signals is dropped even if the cluster is solid. Alternative: fall back to all cluster signals; chosen strict because the cited list is the model's own claim of support.
+
+**D29. Redaction is regex plus entropy.**
+Why: the spec names key patterns and high-entropy strings. Entropy threshold 4.0 bits on tokens of 24+ characters containing digits and letters keeps git SHAs readable (hex is about 3.8) and masks random keys. Known gap: redaction is best effort; secrets in odd formats can slip through. Only the first 300/400 characters of text and diff excerpts are sent.
+
+**D30. Model choice: local Ollama, else Anthropic key, else OpenAI key.**
+Why: the spec says local Ollama if present, otherwise the user's key. Default models are my choice (`anthropic/claude-haiku-5-5`, `openai/gpt-4o-mini`), cheap and small enough for one-sentence rules. Ollama detection is a 0.5 s request to localhost:11434.
