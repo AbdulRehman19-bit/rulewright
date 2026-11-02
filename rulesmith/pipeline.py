@@ -48,6 +48,7 @@ def run_scan(
     now: datetime,
     confirm: Callable[[CostEstimate], bool] = lambda _estimate: True,
     sessions: list[SessionSource] | None = None,
+    progress: Callable[[int, int], None] | None = None,
 ) -> ScanResult:
     history = read_commits(repo, commits)
     agent_commits = sum(1 for c in history if c.is_agent)
@@ -86,7 +87,7 @@ def run_scan(
             build_prompt(c, [by_id[i] for i in c.signal_ids if i in by_id]) for c in fresh
         ]
         if confirm(estimate_cost(client.model, prompts)):
-            proposals = propose_rules(fresh, signals, repo, client)
+            proposals = propose_rules(fresh, signals, repo, client, progress)
             for rule in proposals.rules:
                 for e in rule.evidence:
                     e.url = commit_url(repo, e.commit_sha) if e.commit_sha else ""

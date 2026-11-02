@@ -3,6 +3,7 @@
 import hashlib
 
 import numpy as np
+from numpy.typing import NDArray
 from pydantic import BaseModel
 from sklearn.cluster import HDBSCAN
 
@@ -30,13 +31,19 @@ def cluster_signals(
     if len(signals) < min_size:
         return []
     matrix = np.vstack(vectors)
-    labels = HDBSCAN(
-        min_cluster_size=min_size, allow_single_cluster=True, copy=True
-    ).fit_predict(matrix)
+    labels = _labels(matrix, min_size, allow_single=False)
+    if not any(label != -1 for label in labels.tolist()):
+        # HDBSCAN cannot return one cluster unless allowed to, but allowing it everywhere
+        # merged unrelated mistakes into one blob on real repositories; use it only as a retry
+        labels = _labels(matrix, min_size, allow_single=True)
     clusters = []
     for label in sorted(set(labels.tolist()) - {-1}):
         idx = [i for i, lab in enumerate(labels) if lab == label]
         if len(idx) < min_size:
+            continue
+        # a repeated mistake is repeated across commits: one commit followed by three fixes
+        # is one occurrence
+        if len({signals[i].commit_sha or signals[i].id for i in idx}) < min_size:
             continue
         centroid = matrix[idx].mean(axis=0)
         nearest = idx[int(np.argmin(np.linalg.norm(matrix[idx] - centroid, axis=1)))]
@@ -51,6 +58,11 @@ def cluster_signals(
             )
         )
     return sorted(clusters, key=lambda c: (-c.size, c.id))
+
+
+def _labels(matrix: NDArray[np.float32], min_size: int, allow_single: bool) -> NDArray[np.intp]:
+    model = HDBSCAN(min_cluster_size=min_size, allow_single_cluster=allow_single, copy=True)
+    return model.fit_predict(matrix)  # type: ignore[no-any-return]
 
 
 def cold_start_message(n_clusters: int, commits: int) -> str | None:

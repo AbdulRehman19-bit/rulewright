@@ -177,3 +177,38 @@ The spec's ingest step lists "co-author trailers, bot authors, or matching sessi
 
 **D49. README is honest about its state.**
 The spec wants a GIF and a real rule from a public repo; neither exists yet. The README says pre-release, installs from the GitHub URL, labels its example as a demo repo, and leaves the GIF as a hidden TODO.
+
+## Phase 6b: Real-repo check (BerriAI/litellm, tldraw/tldraw, pydantic/pydantic-ai)
+
+Repos were found with the GitHub commit search ("Co-Authored-By: Claude"; litellm 1432 hits, pydantic-ai 379, tldraw 244), shallow-cloned and scanned with the real embedder, with no LLM first. The spec's gate is to read the output by hand; doing so found four bugs that no fixture had.
+
+**D50. Revert and re-fix matching is by line content, not by deletion counts.**
+Found: on litellm, 74 agent commits produced 123 signals, 24 from one commit. Cause: the revert heuristic counted deleted lines anywhere in a file the agent touched, and a shared data file (model prices JSON) is edited by everyone. Now a later commit counts only if it removes lines the agent added (each matched at most once; short or punctuation-only lines ignored; lockfiles and generated files skipped). Signals fell to 20, and the regression is a test (`build_busy_file`).
+
+**D51. A bot author is an agent only if it names a coding agent.**
+Found: tldraw's "revert" signals were `Bump versions [skip ci]` commits by a release bot, because any `[bot]` author counted. Now: trailer naming Claude, Codex, Copilot, Cursor, Devin, Aider, OpenHands, Jules, Gemini or Sweep, or a bot author containing one of those, or `noreply@anthropic.com`. litellm's 56 `devin-ai-integration[bot]` commits are correctly agents; dependabot, github-actions and huppy-bot are not. A human named Claude is not an agent.
+
+**D52. Detector speed: index each agent commit once.**
+Found: scanning 500 litellm commits took over 6 minutes; `detect_reverts` alone 360 s, because the first content-matching version rebuilt a line counter for every (later, agent) pair. Now it is built once per agent commit with a quick reject before any copying: 2.8 s. Reading 500 commits is 15-20 s (`git log -p`, 70 MB on litellm); 2000 commits is about 2.5 minutes in total with the embedder.
+
+**D53. HDBSCAN runs strict first; single-cluster mode is only a retry.**
+Found: with `allow_single_cluster=True` always, 163 of litellm's 257 signals landed in one cluster, which would make one useless rule. Strict mode gave 19 distinct clusters. The retry keeps the case of one repeated mistake working (fixture with six repeats).
+
+**D54. The summary that gets embedded now leads with the human's change.**
+Commit subjects of a busy repository are all different, so subject-only embeddings could not group anything. The excerpt (`- from app.settings import X` / `+ from app.config import X`) is in `Signal.diff_excerpt` and first in the embedded text.
+
+**D55. What the real-repo check says about quality (not fixed, to be judged by the user).**
+Read by hand, litellm's 19 clusters group by area of churn (a feature under heavy agent work, a Rust refactor, MCP, model-price rows), not by one repeated mistake, because in a high-velocity repo most "an agent line changed again within 48 hours" events are normal iteration. The clearest real pattern was model-price rows missing capability flags. The 3-evidence minimum and the cold-start message keep weak repos from producing rules, but whether the rules are valuable is a judgment the user makes from the evidence links, which is why every rule shows them. A trailer-less agent is invisible (D48), and longer history (`--commits 2000`) finds more clusters.
+
+**D56. `scan` shows progress while the LLM works.**
+Found: five rules from a 7B model on CPU took 13 minutes with nothing on screen. The status line now reads "Writing rule i of n with the LLM (a local model can be slow)". There is no timeout or parallelism yet.
+
+**D57. Evidence counts distinct commits, not signals; clusters need 3 distinct commits.**
+Found: litellm rules listed the same commit up to four times, because one agent commit with several follow-up fixes yields several signals. "Cites 3+ commits" was therefore not true. Now a cluster needs 3 distinct commits (session messages count individually), and a rule's evidence keeps one signal per commit; fewer than 3 distinct drops the rule with the reason "only N distinct verified evidence items".
+
+**D58. The model may decline: an empty rule means "no specific repeated mistake".**
+Found: a local 7B model wrote generic rules from real clusters ("Import necessary modules at the beginning of each file", "Ensure consistent formatting and structure in JSON files"). The prompt now requires a rule specific to the repository (a module, function, file pattern or practice from the data), forbids generic advice, and allows `{"rule": ""}`, which is reported as a dropped cluster. A heuristic "vague" flag was considered and rejected: it would flag good rules such as "Do not skip failing pytest tests". The user still judges from the evidence links. Prompt quality depends on the model; a small local model abstains less than a larger one.
+
+**D59. Result of the second real LLM run (litellm, 2000 commits, `qwen2.5-coder:7b`, top 3 of 15 clusters).**
+Evidence is now correct: every cited commit is distinct (9, 10 and 6 commits). But the 7B model still wrote generic rules ("Import necessary modules at the top of each file", "Ensure all imports are grouped and sorted alphabetically within each file", "Ensure consistent formatting of cost-related data in JSON files") and did not abstain. So on a busy real repository the mining and clustering are usable, but rule quality is limited by the model, and this model is not good enough for launch-quality output. Not tested: a larger model (no API key was available in this session). Before launch, run `--model` with a stronger model on three public repos and keep a rule worth showing in the README; until then the README example is from a demo repo.
+Also not done: pydantic-ai was cloned but not scanned (only 8 Claude trailers in its last 500 commits); the check covered litellm and tldraw. tldraw at 2000 commits gave 3 distinct-commit clusters at most, so it falls under cold start for LLM purposes.

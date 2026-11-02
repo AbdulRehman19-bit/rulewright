@@ -225,3 +225,23 @@ def test_cost_estimate_is_free_locally_and_uses_the_pricer_otherwise() -> None:
     paid = estimate_cost("anthropic/x", prompts, pricer=lambda m, i, o: (i + o) / 1e6)
     assert paid.usd == (600 + 600) / 1e6
     assert estimate_cost("mystery/model", prompts, pricer=lambda m, i, o: None).usd is None
+
+
+def test_three_fixes_of_one_commit_are_one_piece_of_evidence(tmp_path: Path) -> None:
+    repo, signals, cluster = _make(tmp_path, n=3)
+    same = [s.model_copy(update={"commit_sha": signals[0].commit_sha}) for s in signals]
+    result = propose_rules([cluster], same, repo, ScriptedLLM(_reply(cited=["s0", "s1", "s2"])))
+    assert result.rules == [] and "1 distinct" in result.dropped[0].reason
+
+
+def test_model_may_decline_to_write_a_vague_rule(tmp_path: Path) -> None:
+    repo, signals, cluster = _make(tmp_path)
+    empty = json.dumps({"rule": "", "scope": [], "cited_signals": []})
+    result = propose_rules([cluster], signals, repo, ScriptedLLM(empty))
+    assert result.rules == [] and "no specific repeated mistake" in result.dropped[0].reason
+
+
+def test_prompt_demands_specific_rules() -> None:
+    from rulesmith.propose.writer import SYSTEM_PROMPT
+
+    assert "specific to this repository" in SYSTEM_PROMPT and "empty rule" in SYSTEM_PROMPT

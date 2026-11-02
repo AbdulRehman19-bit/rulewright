@@ -126,10 +126,14 @@ def scan(
             return True
         return typer.confirm("Proceed with the paid call?")
 
-    with console.status("Reading history and clustering mistakes..."):
+    with console.status("Reading history and clustering mistakes...") as status:
+
+        def progress(i: int, n: int) -> None:
+            status.update(f"Writing rule {i} of {n} with the LLM (a local model can be slow)...")
+
         result = run_scan(
             repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
-            sessions=[ClaudeCodeSource()],
+            sessions=[ClaudeCodeSource()], progress=progress,
         )  # fmt: skip
 
     kinds = ", ".join(sorted({s.kind for s in result.signals}))

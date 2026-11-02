@@ -7,12 +7,28 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-_AGENT_TRAILER = re.compile(r"^co-authored-by:.*\b(claude|codex|copilot|cursor)\b", re.I | re.M)
-_BOT_AUTHOR = re.compile(r"(\[bot\]|-bot\b|\bbot$)", re.I)
+_AGENTS = "claude|codex|copilot|cursor|devin|aider|openhands|jules|gemini|sweep"
+_AGENT_TRAILER = re.compile(rf"^co-authored-by:.*\b({_AGENTS})\b", re.I | re.M)
+# A bot counts only when it names a coding agent: release and dependency bots are not agents.
+_AGENT_AUTHOR = re.compile(
+    rf"(?:{_AGENTS})[\w.+-]*\[bot\]|noreply@anthropic\.com|\+(?:copilot|claude)@users\.noreply",
+    re.I,
+)
 _REC = "\x1e"  # starts a commit record
 _FLD = "\x1f"  # separates header fields
 _END = "\x1d"  # ends the header; numstat and patch follow
 MAX_PATCH_CHARS = 20_000
+MAX_LINES_PER_FILE = 1000  # per direction; keeps huge generated files from dominating memory
+MAX_LINE_CHARS = 200
+# Never evidence of an agent mistake and often huge, so git does not even print them.
+_EXCLUDE = [
+    f":(exclude,glob)**/{pattern}"
+    for pattern in (
+        "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "Cargo.lock", "uv.lock",
+        "poetry.lock", "Gemfile.lock", "composer.lock", "go.sum", "*.lock", "*.min.js",
+        "*.min.css", "*.snap", "*.svg", "*.map",
+    )
+]  # fmt: skip
 
 Range = tuple[int, int]  # inclusive line range
 
@@ -23,6 +39,8 @@ class FileChange(BaseModel):
     deleted: int
     old_ranges: list[Range] = []  # lines removed or replaced, in the parent's numbering
     new_ranges: list[Range] = []  # lines added or replaced, in this commit's numbering
+    added_lines: list[str] = []  # text of added lines (capped), untrusted
+    removed_lines: list[str] = []  # text of removed lines (capped), untrusted
 
 
 class Commit(BaseModel):
@@ -47,11 +65,8 @@ class Commit(BaseModel):
 
 
 def is_agent_commit(author_name: str, author_email: str, body: str) -> bool:
-    return bool(
-        _AGENT_TRAILER.search(body)
-        or _BOT_AUTHOR.search(author_name)
-        or _BOT_AUTHOR.search(author_email)
-    )
+    author = f"{author_name} <{author_email}>"
+    return bool(_AGENT_TRAILER.search(body) or _AGENT_AUTHOR.search(author))
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -69,7 +84,7 @@ def read_commits(repo: Path, limit: int = 500) -> list[Commit]:
     fmt = _FLD.join(["%H", "%P", "%an", "%ae", "%aI", "%s", "%b"]) + _END
     out = _git(
         repo, "log", f"-n{limit}", "--no-renames", "--numstat", "-p", "-U0",
-        f"--format={_REC}{fmt}",
+        f"--format={_REC}{fmt}", "--", ".", *_EXCLUDE,
     )  # fmt: skip
     commits: list[Commit] = []
     for rec in out.split(_REC)[1:]:
@@ -113,23 +128,38 @@ def _span(start: str, length: str | None) -> Range | None:
     return (s, s + n - 1) if n > 0 else None
 
 
-def _parse_hunks(patch: str) -> dict[str, tuple[list[Range], list[Range]]]:
-    hunks: dict[str, tuple[list[Range], list[Range]]] = {}
-    current: str | None = None
+class _Hunks:
+    def __init__(self) -> None:
+        self.old: list[Range] = []
+        self.new: list[Range] = []
+        self.added: list[str] = []
+        self.removed: list[str] = []
+
+
+def _parse_hunks(patch: str) -> dict[str, _Hunks]:
+    hunks: dict[str, _Hunks] = {}
+    current: _Hunks | None = None
     for line in patch.splitlines():
         m = _DIFF_HEADER.match(line)
         if m:
-            current = m.group(1)
-            hunks[current] = ([], [])
+            current = hunks[m.group(1)] = _Hunks()
+            continue
+        if current is None:
             continue
         h = _HUNK.match(line)
-        if h and current is not None:
+        if h:
             old = _span(h.group(1), h.group(2))
             new = _span(h.group(3), h.group(4))
             if old:
-                hunks[current][0].append(old)
+                current.old.append(old)
             if new:
-                hunks[current][1].append(new)
+                current.new.append(new)
+        elif line.startswith("+") and not line.startswith("+++"):
+            if len(current.added) < MAX_LINES_PER_FILE:
+                current.added.append(line[1:].strip()[:MAX_LINE_CHARS])
+        elif line.startswith("-") and not line.startswith("---"):
+            if len(current.removed) < MAX_LINES_PER_FILE:
+                current.removed.append(line[1:].strip()[:MAX_LINE_CHARS])
     return hunks
 
 
@@ -140,14 +170,16 @@ def _parse_files(stat: str, patch: str) -> list[FileChange]:
         m = _NUMSTAT.match(line)
         if m:
             a, d, path = m.groups()
-            old, new = hunks.get(path, ([], []))
+            h = hunks.get(path) or _Hunks()
             changes.append(
                 FileChange(
                     path=path,
                     added=0 if a == "-" else int(a),
                     deleted=0 if d == "-" else int(d),
-                    old_ranges=old,
-                    new_ranges=new,
+                    old_ranges=h.old,
+                    new_ranges=h.new,
+                    added_lines=h.added,
+                    removed_lines=h.removed,
                 )
             )
     return changes

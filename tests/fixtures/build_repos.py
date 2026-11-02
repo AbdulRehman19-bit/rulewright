@@ -158,3 +158,26 @@ def build_three_patterns(path: Path, hostile: bool = False, start: datetime = T0
                 repo, {f: f"a\nb\nc\nd\n{good}\nf\n"}, f"fix {name} {good} {i}",
                 when + timedelta(hours=2),
             )  # fmt: skip
+
+
+def build_busy_file(path: Path) -> dict[str, str]:
+    """An agent appends rows to a shared data file; a human then deletes OTHER rows from it.
+
+    The human commit removes more lines than the agent added, in a file the agent touched, but
+    not one line the agent wrote: neither a revert nor a re-fix. (Seen in real repositories as
+    commits to a pricing table.) A lockfile edited by both is included for the same reason.
+    """
+    repo = init_repo(path)
+    rows = [f'  "model-{i}": {{"price": {i}.5}},\n' for i in range(60)]
+    commit(repo, {"prices.json": "".join(rows), "uv.lock": "a = 1\nb = 2\nc = 3\n"}, "base", T0)
+    new = rows + [f'  "agent-{i}": {{"price": {i}.25}},\n' for i in range(10)]
+    agent = commit(
+        repo, {"prices.json": "".join(new), "uv.lock": "a = 1\nb = 2\nc = 3\nagent = 4\n"},
+        "agent adds rows", T0 + timedelta(hours=1), agent=True,
+    )  # fmt: skip
+    pruned = new[25:]
+    commit(
+        repo, {"prices.json": "".join(pruned), "uv.lock": "a = 1\nb = 2\nc = 3\n"},
+        "human prunes old rows and relocks", T0 + timedelta(hours=5),
+    )  # fmt: skip
+    return {"agent": agent}

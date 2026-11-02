@@ -23,3 +23,19 @@ def test_refix_outside_window_is_ignored(tmp_path: Path) -> None:
 def test_revert_is_not_double_counted_as_refix(tmp_path: Path) -> None:
     fx.build_reverted_agent_commit(tmp_path / "r")
     assert detect_refixes(read_commits(tmp_path / "r")) == []
+
+
+def test_unrelated_deletions_in_a_busy_file_are_not_signals(tmp_path: Path) -> None:
+    from rulesmith.mine.detectors import detect_reverts
+
+    fx.build_busy_file(tmp_path / "r")
+    history = read_commits(tmp_path / "r")
+    assert detect_refixes(history) == []
+    # 25 lines were deleted against 10 added, but none of the deleted lines were the agent's
+    assert detect_reverts(history) == []
+
+
+def test_the_signal_excerpt_shows_the_humans_fix(tmp_path: Path) -> None:
+    fx.build_refix(tmp_path / "r")
+    (signal,) = detect_refixes(read_commits(tmp_path / "r"))
+    assert signal.diff_excerpt == "- from app.settings import X\n+ from app.config import X"

@@ -14,7 +14,7 @@ TS = datetime(2026, 1, 5, tzinfo=UTC)
 
 def _sig(i: int, text: str) -> Signal:
     return Signal(
-        id=f"s{i}", kind="refix", commit_sha="abc1234", files=["app/x.py"], text=text,
+        id=f"s{i}", kind="refix", commit_sha=f"{i:07x}", files=["app/x.py"], text=text,
         author_is_agent=True, score=0.8, ts=TS,
     )  # fmt: skip
 
@@ -75,3 +75,16 @@ def test_cold_start_message() -> None:
     assert cold_start_message(3, 500) is None
     msg = cold_start_message(1, 500)
     assert msg and "1 repeated" in msg and "--commits 2000" in msg
+
+
+def test_one_commit_with_many_fixes_is_not_a_repeated_mistake() -> None:
+    sigs = [
+        _sig(i, text).model_copy(update={"commit_sha": "a" * 40, "id": f"s{i}"})
+        for i, text in enumerate(IMPORTS)
+    ]
+    assert cluster_signals(sigs, embed_signals(sigs, FakeEmbedder())) == []
+    two_commits = [
+        s.model_copy(update={"commit_sha": ("b" if i % 4 == 0 else "a") * 40})
+        for i, s in enumerate(sigs)
+    ]
+    assert cluster_signals(two_commits, embed_signals(two_commits, FakeEmbedder())) == []

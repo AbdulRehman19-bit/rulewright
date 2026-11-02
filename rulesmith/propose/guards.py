@@ -112,6 +112,19 @@ def sha_exists(repo: Path, sha: str) -> bool:
     return result.returncode == 0
 
 
+def distinct_evidence(signals: list[Signal]) -> list[Signal]:
+    """One signal per commit (or per session message). One agent commit with three follow-up
+    fixes is one piece of evidence, not three."""
+    seen: set[str] = set()
+    out = []
+    for s in signals:
+        key = s.commit_sha or s.id
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    return out
+
+
 def verified_evidence(repo: Path, signals: list[Signal]) -> list[Signal]:
     """Signals whose evidence is real: an existing commit, or a session message (no SHA)."""
     return [s for s in signals if s.commit_sha == "" or sha_exists(repo, s.commit_sha)]

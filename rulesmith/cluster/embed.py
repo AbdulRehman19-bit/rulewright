@@ -9,7 +9,8 @@ import numpy as np
 from rulesmith.mine.signals import Signal
 from rulesmith.store import Vector, get_embeddings, put_embeddings
 
-DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+SUMMARY_CHANGE_CHARS = 200
+DEFAULT_MODEL ="sentence-transformers/all-MiniLM-L6-v2"
 
 
 class Embedder(Protocol):
@@ -35,9 +36,18 @@ class SentenceTransformerEmbedder:
 
 
 def signal_summary(signal: Signal) -> str:
-    """Short text describing what went wrong; this is what gets embedded."""
+    """Short text describing what went wrong; this is what gets embedded.
+
+    The human's fix (removed and added lines) comes first: it carries the mistake itself,
+    where the commit subjects of a busy repository are all different.
+    """
+    change = " ".join(signal.diff_excerpt.split())[:SUMMARY_CHANGE_CHARS]
     files = ", ".join(signal.files[:5])
-    return f"{signal.kind}: {signal.text}" + (f" (files: {files})" if files else "")
+    return (
+        (f"change: {change} | " if change else "")
+        + f"{signal.kind}: {signal.text}"
+        + (f" (files: {files})" if files else "")
+    )
 
 
 def embed_signals(

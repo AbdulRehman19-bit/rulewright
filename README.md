@@ -46,6 +46,11 @@ Read 45 commits (15 agent-authored); 15 signal(s) [refix] in 3 cluster(s).
 
 `rulesmith-report.md` lists the evidence behind each rule as commit links.
 
+**Rule quality depends on the model.** On busy real repositories a small local model (7B) wrote
+generic rules from good clusters. Judge every rule by its evidence, and for real repos use a
+stronger model: `rulesmith scan --model anthropic/claude-haiku-5-5` (your own API key; the
+cost is shown first).
+
 ## How it stays safe
 
 rulesmith writes text that agents will obey, so everything it mines is treated as hostile.
