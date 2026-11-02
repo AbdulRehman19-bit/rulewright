@@ -29,12 +29,13 @@ Nothing is written to an agent file without approval, and only between the rules
 | `mine/signals.py` | `Signal` model | done |
 | `mine/detectors.py` | revert, re-fix, correction detectors | done; review detector todo |
 | `mine/score.py` | recency weighting and threshold | done |
-| `cluster/` | embeddings, HDBSCAN | placeholder files |
+| `cluster/embed.py` | `Embedder` interface, sentence-transformers embedder, SQLite embedding cache | done |
+| `cluster/group.py` | HDBSCAN grouping, `Cluster` model, cold-start message | done |
 | `propose/` | LLM writer, risk and injection guards | placeholder files |
 | `rules/model.py` | `Rule`, `Evidence` | done |
 | `rules/source.py`, `stale.py`, `emit/*` | rulesmith.yaml, stale check, per-format writers | placeholder files |
 | `prove/`, `guard/` | v0.2 replay, v0.3 permission learning | reserved |
-| `store.py` | SQLite cache in `.rulesmith/` | placeholder |
+| `store.py` | SQLite cache in `.rulesmith/` (embeddings table) | embeddings done; signals and rule history later |
 
 ## How the finished pieces work
 
@@ -44,12 +45,15 @@ Nothing is written to an agent file without approval, and only between the rules
 - **Session reader**: reads `~/.claude/projects/<slug>/*.jsonl`, keeps only text blocks of user/assistant records, skips sidechains, meta records and malformed lines.
 - **Correction detector** (0.5): a user message that follows an assistant turn, is at most 400 characters, is not harness-injected text, and opens with a rejection phrase ("no", "don't", "stop", "instead" ...). Its signal has no commit SHA; the evidence is the session message.
 - **Scoring**: detectors emit confidence in `score`; `score_signals` multiplies by a recency weight (half-life 180 days) and drops anything below 0.2. Apply once per run.
+- **Embedding**: each signal becomes a short summary (`kind: text (files: ...)`), embedded with `all-MiniLM-L6-v2` (offline after the first model download). Vectors are cached in SQLite keyed by model and SHA-256 of the text, so a rescan only embeds new signals.
+- **Clustering**: scikit-learn HDBSCAN (min cluster size 3, single cluster allowed). Noise and groups under 3 are dropped. A cluster has a deterministic id (hash of its signal ids), a centroid and the text of the signal nearest the centroid as its summary.
+- **Cold start**: fewer than 3 clusters gives a plain message suggesting `--commits 2000` or session logs, instead of inventing weak rules.
 - **Tests**: `tests/fixtures/build_repos.py` builds throwaway repos with planted patterns and negative cases; transcripts are generated in tmp dirs; tests assert detectors find exactly the planted signals.
 
 ## What is used
 
 Python 3.11+, Typer + Rich (CLI), Pydantic v2 (models), git via subprocess, hatchling (build), uv (dev), pytest, ruff, mypy (strict), GitHub Actions on Python 3.11-3.13.
-CI also publishes to PyPI on `v*` tags (trusted publishing). Planned: sentence-transformers, scikit-learn HDBSCAN, LiteLLM, SQLite, PyYAML; v0.2 Docker (docker-py).
+CI also publishes to PyPI on `v*` tags (trusted publishing). Also now: sentence-transformers (torch), scikit-learn HDBSCAN, numpy, SQLite. Planned: LiteLLM, SQLite, PyYAML; v0.2 Docker (docker-py).
 
 ## Phases
 
@@ -61,7 +65,7 @@ Week 1 = phases 0-1, week 2 = phase 2 plus embeddings/clustering (phase 3), week
 | 0 Scaffold | repo layout, pyproject, CI, SECURITY.md, stub CLI | done |
 | 1 Ingest + revert | git ingest, Signal, revert detector, fixture script | done |
 | 2 Detect + score | re-fix detector, Claude Code session reader + correction detector, scoring and threshold done; optional review detector (GitHub token) todo | mostly done |
-| 3 Cluster | local embeddings cached in SQLite, HDBSCAN, 3+ signal rule, cold-start message | todo |
+| 3 Cluster | local embeddings cached in SQLite, HDBSCAN, 3+ signal rule, cold-start message | done |
 | 4 Propose + guard | LiteLLM writer with delimited data block, schema-parsed output, risk scanner, secret redaction, SHA verification, cost estimate | todo |
 | 5 Rules + emit | rulesmith.yaml, marker-based emitters with golden tests, stale check, `apply`, `emit`, `stale` | todo |
 | 6 Ship v0.1 | Rich table, rulesmith-report.md, `--pr`, injection tests, run on 3 public repos, README + GIF, PyPI | todo (launch gate: useful on 3 real repos) |

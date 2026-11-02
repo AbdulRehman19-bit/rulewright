@@ -69,3 +69,24 @@ Why: the spec requires publish on tags; trusted publishing avoids storing a toke
 
 **D17. Placeholder module files for the rest of the spec's layout.**
 Why: the spec lists them and imports should not move later. Only `config.py`, `rules/model.py` and `store.py` (just opens a DB) have code.
+
+## Phase 3: Cluster
+
+**D18. Embeddings behind an `Embedder` protocol; tests use a deterministic fake.**
+Why: unit tests must not download a model or need a network. The real `SentenceTransformerEmbedder` (all-MiniLM-L6-v2, normalized vectors) was run once by hand and separated two planted patterns of 8 signals each, leaving 2 unrelated signals as noise. It imports sentence-transformers lazily because the import is slow.
+Risk: sentence-transformers pulls in torch, a large install that works against the "useful in 2 minutes" goal. If the install is too heavy for pipx users, switch to an ONNX embedder (for example fastembed) behind the same protocol. Revisit before the v0.1 launch.
+
+**D19. Embedding cache keyed by (model, SHA-256 of summary text) in SQLite.**
+Why: the spec asks for embeddings cached in SQLite between runs. Keying by text, not signal id, means identical summaries share a vector and a changed summary is re-embedded. All SQL stays in `store.py`.
+
+**D20. Summaries embed `kind`, signal text and up to 5 files, not the diff.**
+Why: MiniLM truncates long inputs and diffs are mostly noise. The spec says "what the agent did, what the human changed"; for now the signal text is the commit subjects (agent -> human fix). Revisit if clusters look weak on real repos.
+
+**D21. HDBSCAN with `min_cluster_size=3`, `allow_single_cluster=True`, default `min_samples`.**
+Why: 3 is the spec minimum; without `allow_single_cluster` a repo with one dominant mistake yields no cluster at all. I tried `min_samples=1`: it pulled unrelated noise into clusters, so it was dropped. On very small inputs (3-4 points) HDBSCAN can drop a border point and return a cluster of 3 out of 4; that is normal behaviour, so tests use realistic group sizes (8) and assert at least 7 of 8.
+
+**D22. Cluster id is a hash of its sorted signal ids; summary is the member nearest the centroid.**
+Why: ids stay stable across runs for the same members, which phase 5 needs to track a rule's history. Choosing a real member as summary keeps the text human-written, not synthesized. The LLM writes the actual rule in phase 4.
+
+**D23. Cold-start message triggers below 3 clusters and suggests a scan four times deeper (at least 2000 commits).**
+Why: spec says to suggest `--commits 2000` or session logs and not invent weak rules. The exact multiplier is mine.
