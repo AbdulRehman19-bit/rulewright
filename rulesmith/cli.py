@@ -10,8 +10,21 @@ from rich.table import Table
 
 from rulesmith.cluster.embed import Embedder, SentenceTransformerEmbedder
 from rulesmith.config import load_config
+from rulesmith.guard.emit import (
+    SettingsError,
+    load_settings,
+    render,
+    rule_for,
+    settings_path,
+    unified_diff,
+    with_rules,
+    write_atomic,
+)
+from rulesmith.guard.profile import MIN_USES, Pattern, allowable, build_profile
 from rulesmith.ingest.git_history import read_commits
+from rulesmith.ingest.sessions.base import ToolCall, ToolCallSource
 from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource
+from rulesmith.ingest.sessions.codex import CodexSource
 from rulesmith.mine.detectors import (
     dedupe_signals,
     detect_corrections,
@@ -392,3 +405,86 @@ def prove(
     out = repo / ".rulesmith" / "prove"
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{rule.id}.json").write_text(report.model_dump_json(indent=2), encoding="utf-8")
+
+
+def _tool_call_sources() -> list[ToolCallSource]:
+    return [ClaudeCodeSource(), CodexSource()]
+
+
+def _guard_table(title: str, patterns: list[Pattern], style: str = "") -> None:
+    table = Table("pattern", "uses", "sessions", "failed", "example", title=title)
+    for p in patterns:
+        table.add_row(p.pattern, str(p.uses), str(p.sessions), str(p.failures), p.example,
+                      style=style)  # fmt: skip
+    console.print(table)
+
+
+@app.command()
+def guard(
+    repo: RepoOption = Path("."),
+    min_uses: Annotated[int, typer.Option(help="Times a command must have run.")] = MIN_USES,
+    include_review: Annotated[
+        bool, typer.Option("--include-review", help="Also offer commands outside the safe list.")
+    ] = False,
+    local: Annotated[
+        bool, typer.Option("--local", help="Use .claude/settings.local.json, not settings.json.")
+    ] = False,
+    diff: Annotated[bool, typer.Option("--diff", help="Show the change; write nothing.")] = False,
+    apply: Annotated[bool, typer.Option("--apply", help="Write the change after asking.")] = False,
+    yes: Annotated[bool, typer.Option("--yes", help="Do not ask before writing.")] = False,
+) -> None:
+    """Propose a Claude Code permission allowlist from the commands agents ran here."""
+    calls: list[ToolCall] = []
+    for source in _tool_call_sources():
+        calls += source.read_calls(repo)
+    profile = build_profile(calls, min_uses)
+    if profile.commands_seen == 0:
+        console.print(
+            "No shell commands found in your Claude Code or Codex session logs for this repo."
+        )
+        raise typer.Exit(0)
+    console.print(
+        f"Read {profile.commands_seen} shell command(s) from agent sessions"
+        + (f"; ignored {profile.skipped_other_shell} PowerShell command(s)"
+           if profile.skipped_other_shell else "")
+        + "."
+    )  # fmt: skip
+    safe, review = profile.tier("safe"), profile.tier("review")
+    if safe:
+        _guard_table("Safe to allow (read-only, test, lint, build)", safe)
+    if review:
+        note = "included" if include_review else "not written unless --include-review"
+        _guard_table(f"Run often, but your call ({note})", review, "yellow")
+    if never := profile.tier("never"):
+        names = ", ".join(f"{p.pattern} ({p.uses}x)" for p in never[:8])
+        console.print(f"[dim]Never offered, Claude Code keeps asking: {names}[/dim]")
+    refused = [p.pattern for p in profile.patterns if p.denied]
+    if refused:
+        console.print(f"[dim]You refused these at least once, so they are left out: "
+                      f"{', '.join(refused)}[/dim]")  # fmt: skip
+
+    chosen = allowable(profile, include_review)
+    if not chosen:
+        console.print("Nothing to allow yet. Try a lower --min-uses or more sessions.")
+        raise typer.Exit(0)
+    path = settings_path(repo, local)
+    try:
+        old = load_settings(path)
+    except SettingsError as e:
+        raise _fail(str(e)) from None
+    new, added = with_rules(old, [rule_for(p) for p in chosen])
+    if not added:
+        console.print(f"Every rule is already in {path.name}. Nothing to change.")
+        raise typer.Exit(0)
+    before = path.read_text(encoding="utf-8") if path.exists() else ""
+    text = unified_diff(before, render(new), f".claude/{path.name}")
+    if diff or apply:
+        console.print(text, markup=False, highlight=False)
+    if not apply:
+        console.print(f"{len(added)} rule(s) would be added. Nothing was written. "
+                      "Use --diff to see the change and --apply to write it.")  # fmt: skip
+        raise typer.Exit(0)
+    if not yes and not typer.confirm(f"Write {len(added)} rule(s) to {path}?"):
+        raise _fail("Cancelled; nothing was written.", 0)
+    write_atomic(path, render(new))
+    console.print(f"Wrote {len(added)} rule(s) to {path}.")

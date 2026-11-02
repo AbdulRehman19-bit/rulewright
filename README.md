@@ -8,7 +8,7 @@ coding agents keep repeating, and proposes evidence-backed rules for `AGENTS.md`
 messages. Nothing is written until you approve it.
 
 > **Status: pre-release (v0.1).** Not on PyPI yet, and not yet tried on public repos.
-> `prove` (replay past tasks to check a rule works) is planned for v0.2.
+> `prove` and `guard` are pre-release.
 
 <!-- TODO before launch: GIF of `rulesmith scan` on a known public repo -->
 
@@ -28,6 +28,9 @@ rulesmith apply r-3e6f373f r-5f86d161    # accept chosen rules, write rulesmith.
 rulesmith emit --dry-run  # preview re-rendering every agent file from rulesmith.yaml
 rulesmith stale           # rules that mention paths or commands that no longer exist
 rulesmith prove r-3e6f373f  # replay past tasks with and without the rule (needs Docker)
+rulesmith guard           # propose a permission allowlist from the commands agents ran
+rulesmith guard --diff    # show the change to .claude/settings.json, write nothing
+rulesmith guard --apply   # write it after you confirm
 ```
 
 Mining and clustering run locally with no API key. Only the last step, writing the rule text,
@@ -76,7 +79,11 @@ See [SECURITY.md](SECURITY.md).
   no secrets) with and without a rule and report how often the mistake recurs. Results are
   evidence, not statistical proof: a handful of tasks, nondeterministic agents, and prompts rebuilt
   from commit messages. The built-in agent is simple; its runs are only as good as the model.
-- **v0.3** `guard`: learn a least-privilege permission allowlist from the same session logs.
+- **v0.3** `guard` (implemented, pre-release): reads the shell commands your agents ran (Claude
+  Code and Codex logs) and proposes `permissions.allow` rules for Claude Code, but only for a
+  short built-in list of read-only, test, lint and build commands. Everything else it sees is
+  shown for you to judge, and risky commands (`rm`, `curl`, `git push`, interpreters, `docker`) are
+  never offered. It runs no LLM and executes nothing.
 
 How it works and why each choice was made: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
 [docs/DECISIONS.md](docs/DECISIONS.md).

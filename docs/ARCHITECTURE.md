@@ -28,7 +28,8 @@ Nothing is written to an agent file without approval, and only between the rules
 | `config.py` | `.rulesmith/config.toml` with defaults | done |
 | `ingest/git_history.py` | `git log` to `Commit` with line ranges and patch, agent attribution | done |
 | `ingest/sessions/base.py`, `claude_code.py` | `SessionSource` interface, Claude Code transcript reader | done |
-| `ingest/reviews.py`, `sessions/codex.py` | PR review comments (needs token), Codex reader | placeholder |
+| `ingest/sessions/codex.py` | Codex rollout reader (commands only), checked against a real rollout | done |
+| `ingest/reviews.py` | PR review comments (needs token) | placeholder |
 | `mine/signals.py` | `Signal` model | done |
 | `mine/detectors.py` | revert, re-fix, correction detectors | done; review detector todo |
 | `mine/score.py` | recency weighting and threshold | done |
@@ -47,10 +48,13 @@ Nothing is written to an agent file without approval, and only between the rules
 | `prove/agent.py` | `AgentRunner` interface, `BuiltinAgent` JSON-action loop | done |
 | `prove/judge.py` | workspace snapshots, deterministic recurrence check | done |
 | `prove/runner.py` | `prove_rule`: both arms, trials, cost ceiling, LLM-judge fallback, report | done |
-| `guard/` | v0.3 permission learning | reserved |
+| `guard/profile.py` | split commands, classify against a curated safe list, count uses, build the profile | done |
+| `guard/emit.py` | add `Bash(<prefix>:*)` rules to `.claude/settings.json` (merge, diff, atomic write) | done |
 | `store.py` | SQLite cache in `.rulesmith/` (embeddings table) | embeddings done; signals and rule history later |
 
 ## How the finished pieces work
+
+- **`guard`** (no LLM, nothing executed): reads the shell commands agents ran for this repo (Claude Code `Bash` tool calls with their results; Codex `shell` calls whose session `cwd` is the repo). Each command is split on `&&`, `||`, `;` and `|`; commands with `$(...)`, backticks, redirects to real files, here-documents or `FOO=bar cmd` are skipped whole (`2>&1` and `>/dev/null` are ignored). Each part is matched against our own curated list of safe prefixes (`git status`, `uv run pytest`, `cargo test`, ...); the longest match becomes the pattern, so the rule is always one of our prefixes and never text from the log. Tiers: **safe** (on the list), **review** (run often, not on the list; written only with `--include-review`), **never** (interpreters, wrappers like `timeout`, `rm`, `curl`, `git push`, `docker`, paths; reported, never offered). A command the person refused is left out. A pattern needs 3 uses (`--min-uses`). The output is `Bash(<prefix>:*)` in `permissions.allow` of `.claude/settings.json` (`--local` for settings.local.json), merged into the existing file, other keys untouched, written atomically, and only after `--apply` and a yes (or `--yes`). `--diff` prints the change and writes nothing. A settings file that is not valid JSON is refused. PowerShell commands (Claude's `PowerShell` tool, Codex `shell_command`) are counted and ignored because their rule syntax differs.
 
 - **Commit reading**: one `git log -p -U0 --numstat --no-renames` call (lockfiles, minified bundles, snapshots, SVGs and source maps are excluded at the git level); records and header fields split by control characters. Each commit keeps per-file counts, changed line ranges, the text of added and removed lines (capped at 1000 per file) and a truncated patch. A commit is agent-authored if its body has a Co-Authored-By trailer naming a coding agent (Claude, Codex, Copilot, Cursor, Devin, Aider, OpenHands, Jules, Gemini, Sweep), or its author is a `[bot]` whose name contains one of those, or `noreply@anthropic.com`. Release and dependency bots (dependabot, github-actions, huppy-bot) are not agents.
 - **Revert detector**: an agent commit followed within 7 days by a commit that names it in "This reverts commit <sha>" (confidence 1.0), or that removes at least 50% of the significant lines the agent added (matched by line content, each added line matching at most once) in the same files (0.6). The signal's excerpt is the human's change (`- removed` / `+ added`).
@@ -94,6 +98,6 @@ Week 1 = phases 0-1, week 2 = phase 2 plus embeddings/clustering (phase 3), week
 | 5 Rules + emit | rulesmith.yaml, marker-based emitters with golden tests, stale check, `init`, `apply`, `emit`, `stale` | done |
 | 6 Ship v0.1 | `scan`, Rich table, rulesmith-report.md, `--pr`, injection tests, README; real-repo check on litellm, tldraw (done, found and fixed 4 bugs) | code done; launch gate partly done |
 
-Launch gate for v0.1 (not done): run `scan` on 3 public repos that have agent co-authored commits and read the output by hand; record the GIF; confirm the name on PyPI and GitHub and configure the PyPI trusted publisher; replace the placeholder address in SECURITY.md.
+Launch gate for v0.1 (partly done: real scans on litellm with Groq reviewed by hand, four more repos surveyed; see D75, D77): run `scan` on 3 public repos that have agent co-authored commits and read the output by hand; record the GIF; confirm the name on PyPI and GitHub and configure the PyPI trusted publisher; replace the placeholder address in SECURITY.md.
 | 7 v0.2 prove | rebuild tasks, cost estimate/`--max-cost`, Docker sandbox, AgentRunner, judge, before/after report | code done and tested against real containers; real-model replay in progress (see D70) |
-| 8 v0.3 guard | permission profiler, allowlist emitter, `guard --diff`, Codex reader | later |
+| 8 v0.3 guard | permission profiler, allowlist emitter, `guard --diff`/`--apply`, Codex reader | code done and tested; run on this machine's real logs (see D78) |

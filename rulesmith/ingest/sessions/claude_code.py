@@ -13,11 +13,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from rulesmith.ingest.sessions.base import SessionMessage
+from rulesmith.ingest.sessions.base import SessionMessage, ToolCall
 
 
 def project_slug(repo: Path) -> str:
     return re.sub(r"[^A-Za-z0-9]", "-", str(repo.resolve()))
+
+
+DENIED_MARKERS = ("doesn't want to proceed", "was rejected", "user rejected")
+
+
+def _result_text(content: Any) -> str:
+    return content if isinstance(content, str) else _text_of(content)
 
 
 def _text_of(content: Any) -> str:
@@ -85,3 +92,47 @@ class ClaudeCodeSource:
             )
         except (ValueError, KeyError, TypeError, AttributeError):
             return None
+
+    def read_calls(self, repo: Path) -> list[ToolCall]:
+        """Bash commands with whether each failed or was refused (matched by tool_use_id)."""
+        d = self.find_dir(repo)
+        if d is None:
+            return []
+        calls: list[ToolCall] = []
+        for path in sorted(d.glob("*.jsonl")):
+            calls.extend(self._calls_in(path))
+        calls.sort(key=lambda c: c.ts)
+        return calls
+
+    @staticmethod
+    def _calls_in(path: Path) -> list[ToolCall]:
+        pending: dict[str, ToolCall] = {}
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                    content = rec["message"]["content"]
+                    if rec.get("isSidechain") or not isinstance(content, list):
+                        continue
+                    when = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
+                    session = rec.get("sessionId", path.stem)
+                except (ValueError, KeyError, TypeError, AttributeError):
+                    continue
+                for block in content:
+                    if not isinstance(block, dict):
+                        continue
+                    kind = block.get("type")
+                    if kind == "tool_use" and block.get("name") == "Bash":
+                        command = (block.get("input") or {}).get("command")
+                        if isinstance(command, str) and isinstance(block.get("id"), str):
+                            pending[block["id"]] = ToolCall(
+                                session_id=session, agent="claude_code", tool="Bash",
+                                command=command, ts=when,
+                            )  # fmt: skip
+                    elif kind == "tool_result" and block.get("tool_use_id") in pending:
+                        call = pending[block["tool_use_id"]]
+                        if block.get("is_error"):
+                            text = _result_text(block.get("content")).lower()
+                            call.denied = any(m in text for m in DENIED_MARKERS)
+                            call.failed = not call.denied
+        return list(pending.values())
