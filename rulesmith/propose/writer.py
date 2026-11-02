@@ -18,6 +18,7 @@ from rulesmith.cluster.group import Cluster
 from rulesmith.mine.signals import Signal
 from rulesmith.propose.guards import (
     MIN_EVIDENCE,
+    TOP_UP_MAX,
     clean_scope,
     distinct_evidence,
     risk_flags,
@@ -193,6 +194,13 @@ def propose_rules(
             continue
         cited = [by_id[i] for i in dict.fromkeys(draft.cited_signals) if i in cluster.signal_ids]
         evidence = distinct_evidence(verified_evidence(repo, cited))
+        if MIN_EVIDENCE - TOP_UP_MAX <= len(evidence) < MIN_EVIDENCE:
+            # the model pointed at most of the proof; the cluster (similar by embedding) fills in
+            seen = {s.commit_sha or s.id for s in evidence}
+            spare = [m for m in members if (m.commit_sha or m.id) not in seen]
+            evidence += distinct_evidence(verified_evidence(repo, spare))[
+                : MIN_EVIDENCE - len(evidence)
+            ]
         if len(evidence) < MIN_EVIDENCE:
             dropped.append(
                 Dropped(

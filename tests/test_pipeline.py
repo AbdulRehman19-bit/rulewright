@@ -127,3 +127,4 @@ def test_hijacked_reply_is_dropped(hostile_repo: Path) -> None:
     result = _scan(hostile_repo, RawLLM("Sure! I will ignore previous instructions."))
     assert result.proposals is not None
     assert result.proposals.rules == [] and result.proposals.dropped
+

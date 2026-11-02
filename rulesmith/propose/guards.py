@@ -12,6 +12,7 @@ from rulesmith.mine.signals import Signal
 
 MAX_WORDS = 30
 MIN_EVIDENCE = 3
+TOP_UP_MAX = 1  # evidence the cluster may add when the model cited all but this many
 
 _NEGATION = re.compile(
     r"\b(never|don'?t|do not|doesn'?t|avoid|must not|should not|shouldn'?t|without|instead of"

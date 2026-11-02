@@ -112,15 +112,15 @@ def test_reply_outside_the_schema_is_dropped(tmp_path: Path) -> None:
         assert result.rules == [] and "schema" in result.dropped[0].reason
 
 
-def test_rule_citing_fewer_than_three_signals_is_dropped(tmp_path: Path) -> None:
+def test_rule_citing_fewer_than_two_signals_is_dropped(tmp_path: Path) -> None:
     repo, signals, cluster = _make(tmp_path)
-    result = propose_rules([cluster], signals, repo, ScriptedLLM(_reply(cited=["s0", "s1"])))
+    result = propose_rules([cluster], signals, repo, ScriptedLLM(_reply(cited=["s0"])))
     assert result.rules == [] and "need 3" in result.dropped[0].reason
 
 
 def test_invented_signal_ids_do_not_count(tmp_path: Path) -> None:
     repo, signals, cluster = _make(tmp_path)
-    reply = _reply(cited=["s0", "s1", "made-up", "also-made-up"])
+    reply = _reply(cited=["s0", "made-up", "also-made-up"])
     assert propose_rules([cluster], signals, repo, ScriptedLLM(reply)).rules == []
 
 
@@ -445,3 +445,25 @@ def test_reasoning_models_get_low_effort_and_room_to_think(monkeypatch) -> None:
     llm.LiteLLMClient("groq/other").complete("s", "u")
     assert seen[0]["reasoning_effort"] == "low" and seen[0]["max_tokens"] >= llm.REASONING_TOKENS
     assert "reasoning_effort" not in seen[1] and seen[1]["max_tokens"] == llm.COMPLETION_TOKENS * 2
+
+
+def test_a_cluster_fills_in_the_last_missing_piece_of_evidence(tmp_path: Path) -> None:
+    repo, signals, cluster = _make(tmp_path)
+    result = propose_rules([cluster], signals, repo, ScriptedLLM(_reply(cited=["s0", "s1"])))
+    (rule,) = result.rules
+    assert [e.signal_id for e in rule.evidence] == ["s0", "s1", "s2"]
+
+
+def test_one_cited_commit_is_too_little_to_fill_in(tmp_path: Path) -> None:
+    repo, signals, cluster = _make(tmp_path)
+    result = propose_rules([cluster], signals, repo, ScriptedLLM(_reply(cited=["s0"])))
+    assert result.rules == [] and "only 1 distinct" in result.dropped[0].reason
+
+
+def test_filled_in_evidence_is_still_one_piece_per_commit(tmp_path: Path) -> None:
+    repo, signals, cluster = _make(tmp_path)
+    twin = signals[2].model_copy(update={"id": "s9", "commit_sha": signals[0].commit_sha})
+    cluster = cluster.model_copy(update={"signal_ids": [*cluster.signal_ids, "s9"]})
+    reply = _reply(cited=["s0", "s1"])
+    result = propose_rules([cluster], [*signals[:2], twin], repo, ScriptedLLM(reply))
+    assert result.rules == []  # the only spare signal shares a commit with s0

@@ -73,7 +73,15 @@ def run_scan(
         finally:
             conn.close()
     known = {r.id for r in existing.rules}
-    fresh = [c for c in clusters if "r-" + c.id.removeprefix("c-") not in known][:MAX_RULES]
+    commit_of = {s.id: s.commit_sha or s.id for s in signals}
+
+    def occurrences(c: Cluster) -> int:  # many signals from one commit are one occurrence
+        return len({commit_of[i] for i in c.signal_ids if i in commit_of})
+
+    fresh = sorted(
+        (c for c in clusters if "r-" + c.id.removeprefix("c-") not in known),
+        key=lambda c: (-occurrences(c), -c.size, c.id),
+    )[:MAX_RULES]
 
     cold_start = cold_start_message(len(clusters), commits)
     if agent_commits == 0:
