@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
@@ -6,10 +7,21 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from rulesmith.cluster.embed import Embedder, SentenceTransformerEmbedder
 from rulesmith.config import load_config
 from rulesmith.ingest.git_history import read_commits
 from rulesmith.ingest.sessions.claude_code import ClaudeCodeSource
 from rulesmith.mine.detectors import detect_corrections, detect_refixes, detect_reverts
+from rulesmith.pipeline import run_scan
+from rulesmith.pr import PRError, create_pr
+from rulesmith.propose.llm import (
+    CostEstimate,
+    LiteLLMClient,
+    LLMClient,
+    ollama_models,
+    pick_model,
+)
+from rulesmith.report import REPORT_NAME, render_report
 from rulesmith.rules.emit import MarkerError, plan_emit, write_changes
 from rulesmith.rules.model import Rule
 from rulesmith.rules.source import (
@@ -74,10 +86,99 @@ def init(repo: RepoOption = Path(".")) -> None:
     console.print(f"Created {path}. Add `.rulesmith/` to .gitignore; commit {FILENAME}.")
 
 
+def _make_embedder() -> Embedder:
+    return SentenceTransformerEmbedder()
+
+
+def _make_client(model: str | None) -> LLMClient | None:
+    chosen = model or pick_model(os.environ, ollama_models())
+    return LiteLLMClient(chosen) if chosen else None
+
+
+def _short(rule: Rule) -> str:
+    refs = [(e.commit_sha or e.signal_id)[:7] for e in rule.evidence[:3]]
+    more = len(rule.evidence) - len(refs)
+    return ", ".join(refs) + (f" +{more}" if more > 0 else "")
+
+
 @app.command()
-def scan(commits: int = typer.Option(500, help="How many recent commits to read.")) -> None:
-    """Find repeated agent mistakes and propose rules."""
-    typer.echo(f"scan is not implemented yet (commits={commits})")
+def scan(
+    repo: RepoOption = Path("."),
+    commits: Annotated[int | None, typer.Option(help="How many recent commits to read.")] = None,
+    model: Annotated[str | None, typer.Option(help="LiteLLM model, e.g. ollama/llama3.1.")] = None,
+    yes: Annotated[bool, typer.Option("--yes", help="Do not ask before a paid LLM call.")] = False,
+    pr: Annotated[
+        bool, typer.Option("--pr", help="Open a pull request with the guard-approved rules.")
+    ] = False,
+) -> None:
+    """Find repeated agent mistakes and propose rules. Changes no agent file."""
+    limit = commits or load_config(repo).commits
+    existing = _load(repo)
+    now = datetime.now(UTC)
+
+    def confirm(estimate: CostEstimate) -> bool:
+        price = "unknown price" if estimate.usd is None else f"about ${estimate.usd:.4f}"
+        console.print(
+            f"LLM: {estimate.model}, {estimate.calls} call(s), ~{estimate.tokens_in} tokens in, "
+            f"~{estimate.tokens_out} out: {price}"
+        )
+        if estimate.usd == 0.0 or yes:
+            return True
+        return typer.confirm("Proceed with the paid call?")
+
+    with console.status("Reading history and clustering mistakes..."):
+        result = run_scan(
+            repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
+            sessions=[ClaudeCodeSource()],
+        )  # fmt: skip
+
+    kinds = ", ".join(sorted({s.kind for s in result.signals}))
+    console.print(
+        f"Read {result.commits_read} commits ({result.agent_commits} agent-authored); "
+        f"{len(result.signals)} signal(s)" + (f" [{kinds}]" if kinds else "")
+        + f" in {len(result.clusters)} cluster(s)."
+    )
+    if result.cold_start:
+        console.print(f"[yellow]{result.cold_start}[/yellow]")
+    for note in result.notes:
+        console.print(f"[yellow]{note}[/yellow]")
+
+    rules = result.proposals.rules if result.proposals else []
+    if rules:
+        table = Table("id", "proposed rule", "scope", "evidence", "risk")
+        for r in rules:
+            table.add_row(
+                r.id, r.text, ", ".join(r.scope), _short(r), ", ".join(r.risk_flags) or "-",
+                style="red" if r.risk_flags else "",
+            )  # fmt: skip
+        console.print(table)
+    for d in result.proposals.dropped if result.proposals else []:
+        console.print(f"[dim]dropped {d.cluster_id}: {d.reason}[/dim]")
+    if result.stale:
+        table = Table("stale rule", "reason", "detail")
+        for f in result.stale:
+            table.add_row(f.rule_id, f.reason, f.detail)
+        console.print(table)
+
+    report = repo / REPORT_NAME
+    report.write_text(render_report(result, repo, now), encoding="utf-8")
+    console.print(f"Report: {report}")
+    if result.proposals is not None:
+        save_pending(repo, rules)
+    if rules:
+        console.print("Nothing has been applied. Accept rules with `rulesmith apply <id> ...`.")
+    if pr:
+        safe = [r for r in rules if not r.risk_flags]
+        if not safe:
+            console.print("[yellow]No rules passed the guards, so no pull request.[/yellow]")
+            return
+        try:
+            outcome = create_pr(repo, safe, existing, now)
+        except (PRError, MarkerError) as e:
+            raise _fail(f"Pull request not created: {e}") from e
+        console.print(f"Branch {outcome.branch}" + (f"; PR {outcome.url}" if outcome.url else ""))
+        for note in outcome.notes:
+            console.print(f"[yellow]{note}[/yellow]")
 
 
 @app.command()

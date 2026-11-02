@@ -1,5 +1,3 @@
-import hashlib
-import re
 import sqlite3
 from datetime import UTC, datetime
 
@@ -8,28 +6,10 @@ import numpy as np
 from rulesmith.cluster.embed import embed_signals, signal_summary
 from rulesmith.cluster.group import cluster_signals, cold_start_message
 from rulesmith.mine.signals import Signal
-from rulesmith.store import Vector, connect
+from rulesmith.store import connect
+from tests.helpers import FakeEmbedder
 
 TS = datetime(2026, 1, 5, tzinfo=UTC)
-
-
-class FakeEmbedder:
-    """Deterministic bag-of-words hashing, so tests never download a model."""
-
-    name = "fake"
-
-    def __init__(self) -> None:
-        self.calls: list[list[str]] = []
-
-    def embed(self, texts: list[str]) -> list[Vector]:
-        self.calls.append(texts)
-        out = []
-        for t in texts:
-            v = np.zeros(512, dtype=np.float32)
-            for w in re.findall(r"[a-z]+", t.lower()):
-                v[int(hashlib.md5(w.encode()).hexdigest(), 16) % 512] += 1.0
-            out.append(v / (np.linalg.norm(v) or 1.0))
-        return out
 
 
 def _sig(i: int, text: str) -> Signal:

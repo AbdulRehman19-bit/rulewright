@@ -147,3 +147,33 @@ Why: golden files are compared byte for byte; Windows checkouts with autocrlf wo
 
 **D40. Bugs found while testing, fixed before commit.**
 A regex written with an escaped `` produced a backspace character and silently matched nothing (URLs were treated as paths); trailing sentence dots made existing paths look dead; "imports" did not match "import". Each now has a test.
+
+## Phase 6: Ship v0.1
+
+**D41. Revert and re-fix signals are deduplicated per (agent commit, later commit) pair, keeping the higher confidence.**
+Found by the new fixture: a human fixing the one line an agent wrote also "deletes most of" that commit, so both detectors fired and one event counted twice (inflating clusters and evidence). Now an event is one signal; re-fix (0.8) beats the deletion heuristic (0.6) and an explicit revert (1.0) beats both. Ids end in `<agent7>-<later7>`, which is what the pair key uses.
+
+**D42. The cluster summary moved inside the data block (injection hole found by a test).**
+The prompt had a "Mistake pattern summary" line outside the delimited block, and that text is a signal's commit subject, so a hostile subject escaped the block. The injection test caught it; the summary is now a JSON line inside the block. Lesson kept as a test: no mined text may appear outside the block, and none in the system prompt.
+
+**D43. Fewer than 3 clusters: message only, no LLM call, no rules.**
+Why: the spec says to say so plainly "rather than inventing weak rules". Costs nothing, and is the literal reading. Alternative: still propose rules for the 1-2 clusters found (each has 3+ evidence items). Easy to relax in `pipeline.run_scan` if real repos show it is too strict.
+
+**D44. `scan` replaces the pending list each run and skips clusters already covered by a rule.**
+Why: pending proposals are cheap to regenerate and stale ones are confusing. "Covered" means a rule in rulesmith.yaml, in any status, has the id derived from the cluster (`r-` plus the cluster hash), so re-running after `apply` proposes nothing new. Verified by hand with a real run. Capped at 10 rules per scan (spec: 5-10).
+Known gap: a cluster that gains or loses a member gets a new id and is proposed again as a new rule; matching by similarity would fix it.
+
+**D45. `--pr` opens a pull request with guard-approved rules; the PR is the approval.**
+Why: spec says output may be a branch and PR that edits rulesmith.yaml and the target files, and that nothing changes without an approved PR. Flagged rules are never included. It refuses when the files it would touch have uncommitted changes, checks for broken markers before creating any branch, always returns to the starting branch, and the commit message carries no attribution trailer. `gh` is injected so tests use a fake. Note: on this machine `gh` is an unrelated Python package (v0.0.4), not the GitHub CLI; its failure is reported as a note and the pushed branch is kept.
+
+**D46. Real end-to-end run with Ollama (closes the gap in D24).**
+On a demo repo with three planted mistakes (45 commits), the real MiniLM embedder gave 3 clusters and `qwen2.5-coder:7b` produced 3 rules with 5 evidence items each, correct scopes and no flags; `apply --all-safe` wrote all three targets; a second `scan` proposed nothing. Quality notes: rule wording was literal and sometimes long ("... in files within the 'imports' directory"); the 30-word limit is enforced only as a flag, not by rewriting. This was a synthetic repo, not a public one, so it does not satisfy the launch gate.
+
+**D47. The suite takes about 2 minutes.**
+Why: fixture repos are real git repos with 45+ commits and git on Windows is slow. Repos are built once per module and shared (read-only). Revisit (smaller fixtures, or `git fast-import`) if it slows development.
+
+**D48. Not done: marking commits agent-authored from matching session logs.**
+The spec's ingest step lists "co-author trailers, bot authors, or matching session logs". Only the first two are implemented; agents that commit without a trailer are missed. Correction signals from session logs are mined separately.
+
+**D49. README is honest about its state.**
+The spec wants a GIF and a real rule from a public repo; neither exists yet. The README says pre-release, installs from the GitHub URL, labels its example as a demo repo, and leaves the GIF as a hidden TODO.

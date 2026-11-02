@@ -80,6 +80,25 @@ def detect_refixes(commits: list[Commit]) -> list[Signal]:
     return signals
 
 
+def _pair_key(signal: Signal) -> str:
+    """Revert and re-fix ids end in `<agent7>-<later7>`; anything else is unique by id."""
+    return signal.id.split("-", 1)[1] if signal.kind in ("revert", "refix") else signal.id
+
+
+def dedupe_signals(signals: list[Signal]) -> list[Signal]:
+    """One signal per (agent commit, later commit) pair, keeping the most confident.
+
+    A human fixing the line an agent just wrote also "deletes most of" that commit, so the
+    revert and re-fix detectors can both fire on one event.
+    """
+    best: dict[str, Signal] = {}
+    for s in signals:
+        key = _pair_key(s)
+        if key not in best or s.score > best[key].score:
+            best[key] = s
+    return [s for s in signals if best[_pair_key(s)] is s]
+
+
 def _explicitly_reverts(later: Commit, target: Commit) -> bool:
     return any(target.sha.startswith(m) for m in _REVERTS_SHA.findall(later.body))
 

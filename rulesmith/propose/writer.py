@@ -74,11 +74,10 @@ def build_prompt(cluster: Cluster, signals: list[Signal]) -> tuple[str, str]:
             "diff_excerpt": redact(s.diff_excerpt)[:MAX_EXCERPT_CHARS],
         }
         items.append(json.dumps(entry))
-    block = "\n".join(items).replace(tag, "")
-    user = (
-        f"Mistake pattern summary: {redact(cluster.summary)[:MAX_TEXT_CHARS]}\n\n"
-        f"<{tag}>\n{block}\n</{tag}>\n\nReply with the JSON object only."
-    )
+    # the cluster summary is a signal's text, so it is mined data like everything else
+    summary = json.dumps({"summary": redact(cluster.summary)[:MAX_TEXT_CHARS]})
+    block = "\n".join([summary, *items]).replace(tag, "")
+    user = f"<{tag}>\n{block}\n</{tag}>\n\nReply with the JSON object only."
     return SYSTEM_PROMPT, user
 
 
