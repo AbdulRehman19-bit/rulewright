@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=1.26",
     "sentence-transformers>=3",
     "litellm>=1.50",
+    "tenacity>=8",  # litellm needs it for num_retries but does not declare it
     "pyyaml>=6.0.3",
     "docker>=7",
 ]

@@ -252,3 +252,6 @@ Both arms finished in 4 steps. Recurrence was 0/1 without the rule and 0/1 with 
 
 **D71. The scan spinner no longer covers the paid-call prompt, and it names its stage.**
 The confirmation ran inside `console.status`, so with a priced model (Groq, Anthropic, OpenAI) the "Proceed?" prompt was hidden behind a spinner reading "Reading history and clustering mistakes..." and the scan looked frozen. `confirm` now stops the spinner, asks, and restarts it, and `run_scan` takes a `stage` callback so the spinner shows reading, detecting, and embedding/clustering in turn. Alternatives: always pass `--yes` (hides the cost check). Revisit if more prompts are added: any prompt must run with the spinner stopped.
+
+**D72. `tenacity` is a declared dependency.**
+litellm imports it lazily when `num_retries` is set and does not require it, so every hosted-model call failed with "tenacity import failed" on a clean install (found on the first real Groq scan; Ollama runs had it installed by chance). Declared it. Alternative: do our own retry loop and drop `num_retries`; not worth it for one small package. Revisit if litellm starts declaring it.
