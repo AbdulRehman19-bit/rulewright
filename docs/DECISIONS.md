@@ -1,6 +1,6 @@
 # Decision log: how and why, step by step
 
-Append a new entry for every meaningful decision, newest last. Format: **Decision** / Why / Alternatives / Revisit if.
+Entries D1-D79 were written when the project was called `rulesmith` (module, command, `rulesmith.yaml`, `.rulesmith/`, `rulesmith:start` markers) and keep that name as history; since D80 it is `rulewright` everywhere. Append a new entry for every meaningful decision, newest last. Format: **Decision** / Why / Alternatives / Revisit if.
 Architecture and flow live in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Phase 0: Scaffold
@@ -276,3 +276,6 @@ The point of an allowlist is less clicking without less safety, so the only rule
 
 **D79. Launch preparation: license, metadata, security contact, and a name conflict.**
 Added a LICENSE file (pyproject said MIT but there was none), authors, classifiers, project URLs; `uv build` produces a wheel and sdist that pass `twine check`, and the wheel installs into a clean virtualenv and runs. SECURITY.md now points to GitHub private vulnerability reporting instead of an invented email address (it must be enabled in the repository settings). **The name `rulesmith` is already taken on PyPI** by an unrelated project (DSPy/GEPA rule programs, github.com/bradAGI/rulesmith, 0.2.0, uploaded 2026-10-20), so the first release cannot use it. Free on PyPI at the time of checking: `rulesmith-cli`, `rulewright`, `agent-lessons`, `lessonsmith`. Not decided yet; see the open question in the conversation. Renaming touches the package directory, imports, the `rulesmith.yaml` filename, the `rulesmith:start/end` markers in already-written agent files, the CLI command and the GitHub repository.
+
+**D80. The project is renamed from `rulesmith` to `rulewright`.**
+The PyPI name `rulesmith` belongs to an unrelated project (D79), and sharing a command name with it would confuse users. `rulewright` was free on PyPI and has few GitHub repositories by that name. Renamed everywhere in one change: the package directory, imports, the CLI command, `rulewright.yaml`, the `.rulewright/` cache directory, `rulewright-report.md`, the `<!-- rulewright:start/end -->` markers, branch names `rulewright/rules-<time>`, docs and tests. No compatibility for the old file names or markers: nothing was released, so no one has them. Not done by this commit: renaming the GitHub repository (the person who owns it does that in Settings; GitHub then redirects the old address, so existing clones keep working) and setting up the PyPI trusted publisher. Alternative: keep the command and change only the PyPI name (rejected, see the question asked in the conversation). Revisit if the name collides with something found later.
