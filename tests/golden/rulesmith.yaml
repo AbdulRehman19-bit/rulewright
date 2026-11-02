@@ -1,0 +1,18 @@
+version: 1
+targets: [agents_md, claude_md, cursor, copilot]
+rules:
+  - id: r-imports-01
+    text: "Import settings from app.config, never from app.settings (removed in v2)."
+    scope: ["app/**"]
+    status: accepted
+    evidence: [a1b2c3d, e4f5a6b, 9c8d7e6]
+  - id: r-tests-02
+    text: "Fix failing tests instead of deleting or skipping them."
+    scope: ["**"]
+    status: accepted
+    evidence: [1111111, 2222222, correction-u0000002]
+  - id: r-draft-03
+    text: "This rule is only proposed and must not be emitted."
+    scope: ["**"]
+    status: proposed
+    evidence: [3333333, 4444444, 5555555]

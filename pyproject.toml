@@ -13,13 +13,19 @@ dependencies = [
     "numpy>=1.26",
     "sentence-transformers>=3",
     "litellm>=1.50",
+    "pyyaml>=6.0.3",
 ]
 
 [project.scripts]
 rulesmith = "rulesmith.cli:app"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.5", "mypy>=1.10"]
+dev = [
+    "pytest>=8",
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "types-pyyaml>=6.0.12.20261030",
+]
 
 [build-system]
 requires = ["hatchling"]

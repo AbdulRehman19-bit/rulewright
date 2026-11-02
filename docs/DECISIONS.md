@@ -114,3 +114,36 @@ Why: the spec names key patterns and high-entropy strings. Entropy threshold 4.0
 
 **D30. Model choice: local Ollama, else Anthropic key, else OpenAI key.**
 Why: the spec says local Ollama if present, otherwise the user's key. Default models are my choice (`anthropic/claude-haiku-5-5`, `openai/gpt-4o-mini`), cheap and small enough for one-sentence rules. Ollama detection is a 0.5 s request to localhost:11434.
+
+## Phase 5: Rules, emit and stale
+
+**D31. Proposals wait in `.rulesmith/pending.json`; only `apply` touches rulesmith.yaml and agent files.**
+Why: the spec says nothing is written without approval, yet `scan` needs to hand its result to `apply` across runs. A local, git-ignored file does that without changing anything committed. Alternative: write proposals into rulesmith.yaml with status `proposed` (the spec's status list allows it); rejected because `scan` would then modify a committed file unasked.
+
+**D32. `apply` takes explicit rule ids, or `--all-safe`; risky rules also need `--allow-risky`.**
+Why: the spec says flagged rules are never pre-selected. With no arguments `apply` only lists pending rules, so nothing is accepted by accident. The targets are planned before anything is saved, so a broken marker aborts the whole apply with the pending list intact.
+
+**D33. Evidence in the yaml is a flat list of refs (SHA or signal id), as in the spec's example.**
+Why: matches the spec file shape and keeps diffs readable. Cost: reading it back loses which signal a commit came from (`signal_id` is empty for SHA refs); nothing needs it yet.
+
+**D34. Emit is a pure plan step plus an explicit write step.**
+Why: `emit --dry-run` and the pre-check in `apply` both need to know what would change without writing. Files are written as bytes, so a CRLF file stays CRLF. Existing files without markers get the block appended, never rewritten, so hand-written content is never touched.
+
+**D35. Broken markers are an error, not a repair.**
+Why: with one marker missing or duplicated we cannot know which text is ours. Refusing is the only way to honour "only content between markers is edited". The error names the counts found.
+
+**D36. Rule text is flattened and stripped of marker strings before rendering.**
+Why: rule text comes from an LLM that read hostile commits. A rule containing the end marker plus new instructions could otherwise escape its block or add headings. Tested with a rule containing both markers and a fake heading.
+
+**D37. Target files: AGENTS.md, CLAUDE.md, .cursorrules, .github/copilot-instructions.md; default targets exclude copilot.**
+Why: spec's example yaml lists `[agents_md, claude_md, cursor]`; copilot is opt-in by adding `copilot` to `targets`. `.cursorrules` is plain text, so it gets no markdown heading. Emitted files do not repeat evidence (it lives in rulesmith.yaml) to save agent tokens.
+
+**D38. Stale heuristics are deliberately cheap and local.**
+Dead path: tokens with a slash or a known source extension, URLs removed first, sentence punctuation trimmed. Dead command: only `make` targets and `npm run` scripts can be checked reliably, so other commands are never called stale. Silent rule: the spec says "no matching signal in 90 days", but rules do not store an embedding, so a signal matches when it touches the rule's scope or shares 2+ content words (lowercased, plural s removed).
+Known gaps: the silent check can miss a rule whose mistakes are described in different words, and flags every rule when the scanned history is short. Revisit with real repos.
+
+**D39. `.gitattributes` forces LF.**
+Why: golden files are compared byte for byte; Windows checkouts with autocrlf would break them. Also removes the CRLF warnings seen on every commit.
+
+**D40. Bugs found while testing, fixed before commit.**
+A regex written with an escaped `` produced a backspace character and silently matched nothing (URLs were treated as paths); trailing sentence dots made existing paths look dead; "imports" did not match "import". Each now has a test.
