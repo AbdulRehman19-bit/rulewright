@@ -6,6 +6,7 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from rulewright.cluster.embed import Embedder, SentenceTransformerEmbedder
@@ -193,7 +194,7 @@ def scan(
             )  # fmt: skip
         console.print(table)
     for d in result.proposals.dropped if result.proposals else []:
-        console.print(f"[dim]dropped {d.cluster_id}: {d.reason}[/dim]")
+        console.print(f"[dim]dropped {d.cluster_id}: {escape(d.reason)}[/dim]")
     if result.stale:
         table = Table("stale rule", "reason", "detail")
         for f in result.stale:

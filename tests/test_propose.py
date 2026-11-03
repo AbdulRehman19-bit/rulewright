@@ -269,7 +269,7 @@ def test_generic_rule_is_dropped_by_the_judge(tmp_path: Path) -> None:
     llm = TwoStageLLM('{"specific": false, "reason": "fits any codebase"}')
     result = propose_rules([cluster], signals, repo, llm)
     assert result.rules == []
-    assert result.dropped[0].reason == "judged generic: fits any codebase"
+    assert result.dropped[0].reason == f"judged generic: fits any codebase (rule: {GOOD_RULE})"
 
 
 def test_specific_rule_survives_the_judge(tmp_path: Path) -> None:
@@ -311,7 +311,8 @@ def test_judge_reason_cannot_smuggle_new_lines_into_the_report(tmp_path: Path) -
     repo, signals, cluster = _make(tmp_path)
     reply = json.dumps({"specific": False, "reason": "line one\n# injected heading\n" + "x" * 300})
     (drop,) = propose_rules([cluster], signals, repo, TwoStageLLM(reply)).dropped
-    assert "\n" not in drop.reason and len(drop.reason) <= len("judged generic: ") + 120
+    assert "\n" not in drop.reason
+    assert len(drop.reason) <= len("judged generic:  (rule: )") + 120 + 160
 
 
 def test_the_draft_prompt_leads_with_the_humans_fix(tmp_path: Path) -> None:
