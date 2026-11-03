@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.1
+
+- A folder that is not a git repository, a repository with no commits and a missing path now
+  give one plain sentence instead of a raw git error. `--commits` must be 1 or more.
+- `stale` reads the history once instead of twice.
+- When the judge drops a cluster as generic, the message now shows the dropped rule, so you can
+  see and recover it.
+- README: demo GIF, and it now says what `scan` leaves in the repository (`rulewright-report.md`
+  and a `.rulewright/` cache folder).
+
 ## 0.1.0
 
 First release.

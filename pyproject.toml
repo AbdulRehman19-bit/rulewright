@@ -1,6 +1,6 @@
 [project]
 name = "rulewright"
-version = "0.1.0"
+version = "0.1.1"
 description = "Mine repeated coding-agent mistakes from git history and propose evidence-backed rules."
 readme = "README.md"
 requires-python = ">=3.11"
