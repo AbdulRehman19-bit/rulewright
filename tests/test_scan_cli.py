@@ -104,3 +104,41 @@ def test_no_llm_still_reports_clusters(
     monkeypatch.setattr(cli, "_make_client", lambda model: None)
     result = _scan(recent_repo)
     assert result.exit_code == 0 and "No LLM available" in result.output
+
+
+# --- places a stranger will try first -----------------------------------------------------
+
+
+def _invoke(*args: str):  # type: ignore[no-untyped-def]
+    from typer.testing import CliRunner
+
+    import rulewright.cli as cli
+
+    return CliRunner().invoke(cli.app, list(args))
+
+
+def test_a_folder_that_is_not_a_git_repository_gets_a_plain_message(tmp_path: Path) -> None:
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    for command in (["scan"], ["stale"]):
+        result = _invoke(*command, "--repo", str(plain))
+        text = " ".join(result.output.split())
+        assert result.exit_code != 0 and "not a git repository" in text, command
+        assert "Traceback" not in result.output and "exclude" not in result.output
+
+
+def test_an_empty_repository_and_a_missing_folder_are_explained(tmp_path: Path) -> None:
+    import subprocess
+
+    empty = tmp_path / "empty"
+    subprocess.run(["git", "init", "-q", str(empty)], check=True)
+    result = _invoke("scan", "--repo", str(empty))
+    assert result.exit_code == 1 and "no commits yet" in " ".join(result.output.split())
+    missing = _invoke("scan", "--repo", str(tmp_path / "nope"))
+    assert missing.exit_code == 1 and "not a folder" in " ".join(missing.output.split())
+
+
+def test_the_number_of_commits_must_be_positive(tmp_path: Path) -> None:
+    for bad in ("0", "-5"):
+        result = _invoke("scan", "--repo", str(tmp_path), "--commits", bad)
+        assert result.exit_code == 2

@@ -79,8 +79,37 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout
 
 
+class HistoryError(Exception):
+    """The history cannot be read; the message says why in plain words."""
+
+
+def _check_repo(repo: Path) -> None:
+    if not repo.is_dir():
+        raise HistoryError(f"{repo} is not a folder. Pass the repository with --repo.")
+    try:
+        inside = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--is-inside-work-tree"],
+            capture_output=True, text=True, encoding="utf-8",
+        )  # fmt: skip
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", "-q", "HEAD"],
+            capture_output=True, text=True, encoding="utf-8",
+        )  # fmt: skip
+    except FileNotFoundError:
+        raise HistoryError("git was not found. Install git and make sure it is on PATH.") from None
+    if inside.returncode != 0:
+        raise HistoryError(
+            f"{repo} is not a git repository. Run rulewright inside one, or pass --repo."
+        )
+    if head.returncode != 0:
+        raise HistoryError(f"{repo} has no commits yet, so there is no history to read.")
+
+
 def read_commits(repo: Path, limit: int = 500) -> list[Commit]:
-    """Return up to `limit` recent commits, oldest first."""
+    """Return up to `limit` recent commits, oldest first. Raises HistoryError if unreadable."""
+    if limit < 1:
+        raise HistoryError("The number of commits to read must be at least 1.")
+    _check_repo(repo)
     fmt = _FLD.join(["%H", "%P", "%an", "%ae", "%aI", "%s", "%b"]) + _END
     out = _git(
         repo, "log", f"-n{limit}", "--no-renames", "--numstat", "-p", "-U0",

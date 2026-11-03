@@ -21,7 +21,7 @@ from rulewright.guard.emit import (
     write_atomic,
 )
 from rulewright.guard.profile import MIN_USES, Pattern, allowable, build_profile
-from rulewright.ingest.git_history import read_commits
+from rulewright.ingest.git_history import HistoryError, read_commits
 from rulewright.ingest.sessions.base import ToolCall, ToolCallSource
 from rulewright.ingest.sessions.claude_code import ClaudeCodeSource
 from rulewright.ingest.sessions.codex import CodexSource
@@ -126,7 +126,9 @@ def _short(rule: Rule) -> str:
 @app.command()
 def scan(
     repo: RepoOption = Path("."),
-    commits: Annotated[int | None, typer.Option(help="How many recent commits to read.")] = None,
+    commits: Annotated[
+        int | None, typer.Option(min=1, help="How many recent commits to read.")
+    ] = None,
     model: Annotated[str | None, typer.Option(help="LiteLLM model, e.g. ollama/llama3.1.")] = None,
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask before a paid LLM call.")] = False,
     judge: Annotated[
@@ -160,11 +162,15 @@ def scan(
         def progress(i: int, n: int) -> None:
             status.update(f"Writing rule {i} of {n} with the LLM (a local model can be slow)...")
 
-        result = run_scan(
-            repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
-            sessions=[ClaudeCodeSource()], progress=progress, judge=judge,
-            stage=lambda name: status.update(name + "..."),
-        )  # fmt: skip
+        try:
+            result = run_scan(
+                repo, limit, _make_embedder(), _make_client(model), existing, now, confirm,
+                sessions=[ClaudeCodeSource()], progress=progress, judge=judge,
+                stage=lambda name: status.update(name + "..."),
+            )  # fmt: skip
+        except HistoryError as e:
+            status.stop()
+            raise _fail(str(e)) from None
 
     kinds = ", ".join(sorted({s.kind for s in result.signals}))
     console.print(
@@ -281,7 +287,9 @@ def _with(rules_file: RulesFile, chosen: list[Rule]) -> RulesFile:
 @app.command()
 def stale(
     repo: RepoOption = Path("."),
-    commits: Annotated[int | None, typer.Option(help="Commits to read for activity.")] = None,
+    commits: Annotated[
+        int | None, typer.Option(min=1, help="Commits to read for activity.")
+    ] = None,
     mark: Annotated[
         bool, typer.Option("--mark", help="Set stale rules to status 'stale' in rulewright.yaml.")
     ] = False,
@@ -289,7 +297,11 @@ def stale(
     """List accepted rules that mention missing paths or commands, or that went silent."""
     rules_file = _load(repo)
     limit = commits or load_config(repo).commits
-    signals = detect_reverts(read_commits(repo, limit)) + detect_refixes(read_commits(repo, limit))
+    try:
+        history = read_commits(repo, limit)
+    except HistoryError as e:
+        raise _fail(str(e)) from None
+    signals = detect_reverts(history) + detect_refixes(history)
     signals += detect_corrections(ClaudeCodeSource().read(repo))
     findings = stale_findings(rules_file.rules, repo, signals, datetime.now(UTC))
     if not findings:
@@ -340,14 +352,19 @@ def prove(
     max_cost: Annotated[float | None, typer.Option(help="Stop before spending more (USD).")] = None,
     model: Annotated[str | None, typer.Option(help="LiteLLM model for the agent.")] = None,
     image: Annotated[str, typer.Option(help="Docker image the agent works in.")] = DEFAULT_IMAGE,
-    commits: Annotated[int, typer.Option(help="History to search for the evidence.")] = 2000,
+    commits: Annotated[
+        int, typer.Option(min=1, help="History to search for the evidence.")
+    ] = 2000,
     yes: Annotated[bool, typer.Option("--yes", help="Do not ask before a paid run.")] = False,
 ) -> None:
     """Replay past tasks with and without a rule and report how often the mistake recurs."""
     rule = _load(repo).get(rule_id)
     if rule is None:
         raise _fail(f"No rule {rule_id} in {FILENAME}.", 2)
-    history = read_commits(repo, commits)
+    try:
+        history = read_commits(repo, commits)
+    except HistoryError as e:
+        raise _fail(str(e)) from None
     signals = dedupe_signals(detect_reverts(history) + detect_refixes(history))
     chosen = build_tasks(rule, history, signals, min(tasks, MAX_TASKS))
     if not chosen:
