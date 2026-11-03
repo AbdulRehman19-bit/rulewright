@@ -7,8 +7,11 @@ coding agents keep repeating, and proposes evidence-backed rules for `AGENTS.md`
 `CLAUDE.md`, `.cursorrules` and Copilot instructions. Every rule cites at least 3 commits or
 messages. Nothing is written until you approve it.
 
-> **Status: pre-release (v0.1).** Not on PyPI yet, and not yet tried on public repos.
-> `prove` and `guard` are pre-release.
+> **Status: v0.1, early.** It has been run on a handful of public repositories. It works best
+> on repos where a lot of agent-written commits get fixed by a person soon after (on litellm,
+> about 3 of 5 proposed rules were good, the rest weak). On repos with little of that it says
+> so and proposes nothing. Treat every proposal as a shortlist to review, not a list to accept.
+> `prove` and `guard` are newer still: `prove` needs Docker and shows evidence, not proof.
 
 <!-- TODO before launch: GIF of `rulewright scan` on a known public repo -->
 
@@ -18,7 +21,7 @@ messages. Nothing is written until you approve it.
 pipx install git+https://github.com/AbdulRehman19-bit/rulewright.git
 ```
 
-Python 3.11+. After the first release: `pipx install rulewright`.
+Python 3.11+. Or, once published: `pipx install rulewright`.
 
 ## Use
 
