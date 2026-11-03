@@ -22,7 +22,7 @@ Nothing is written to an agent file without approval, and only between the rulew
 | Module | Job | State |
 |---|---|---|
 | `cli.py` | Typer app: `init`, `scan`, `apply`, `emit`, `stale`, `prove` | done |
-| `pipeline.py` | `run_scan`: ingest, detect, dedupe, score, embed, cluster, propose, stale check; writes nothing | done |
+| `pipeline.py` | `run_scan`: ingest, detect, dedupe, score, embed, cluster, propose, stale check; writes no files itself (the CLI then writes the report and `.rulewright/` cache) | done |
 | `report.py` | `rulewright-report.md` | done |
 | `pr.py` | `scan --pr`: branch, commit, push, `gh pr create`; GitHub commit URLs | done |
 | `config.py` | `.rulewright/config.toml` with defaults | done |

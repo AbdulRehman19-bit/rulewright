@@ -5,7 +5,9 @@
 rulewright reads your repo's git history (and Claude Code session logs), finds the mistakes
 coding agents keep repeating, and proposes evidence-backed rules for `AGENTS.md`,
 `CLAUDE.md`, `.cursorrules` and Copilot instructions. Every rule cites at least 3 commits or
-messages. Nothing is written until you approve it.
+messages. No rule or agent file is written until you approve it. (`scan` only leaves its own
+report, `rulewright-report.md`, and a cache folder, `.rulewright/`, in the repository; add both to
+your `.gitignore`.)
 
 > **Status: v0.1, early.** It has been run on a handful of public repositories. It works best
 > on repos where a lot of agent-written commits get fixed by a person soon after (on litellm,
@@ -70,7 +72,7 @@ rulewright writes text that agents will obey, so everything it mines is treated 
   disabling tests or permissions. Flagged rules are shown in red and never pre-selected.
 - A rule needs 3+ pieces of evidence, and each cited commit must exist in your repo.
 - Likely secrets are redacted before any API call.
-- Nothing is written without `apply` (or a pull request you review). Only the content between
+- No rule or agent file is written without `apply` (or a pull request you review). Only the content between
   `<!-- rulewright:start -->` and `<!-- rulewright:end -->` is ever edited.
 
 See [SECURITY.md](SECURITY.md).
