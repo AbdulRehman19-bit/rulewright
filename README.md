@@ -18,10 +18,10 @@ messages. Nothing is written until you approve it.
 ## Install
 
 ```
-pipx install git+https://github.com/AbdulRehman19-bit/rulewright.git
+pipx install rulewright
 ```
 
-Python 3.11+. Or, once published: `pipx install rulewright`.
+Python 3.11+. The first run downloads a small embedding model (about 90 MB).
 
 ## Use
 

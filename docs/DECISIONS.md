@@ -295,3 +295,6 @@ Version set to 0.1.0 (package and `__version__`), CHANGELOG.md added, README sta
 
 **D85. Release guide and demo script.**
 Added docs/RELEASING.md (one-time setup, pre-tag checks, tag, post-publish smoke test, what to do if a bad version ships) and docs/demo.tape (a VHS script for the README GIF). The release itself is waiting on the repository owner: the GitHub repository is still named rulesmith and no PyPI pending publisher exists, so tagging would only fail the publish job. The demo cannot be recorded here: it needs a Groq key and a screen recorder, and a GIF with a made-up result would not be honest.
+
+**D86. 0.1.0 is published.**
+After the repository was renamed and the PyPI pending publisher added, the tag `v0.1.0` ran the workflow: tests on Python 3.11-3.13 passed and the publish job uploaded with trusted publishing. A clean install of `rulewright==0.1.0` from PyPI runs (`--help`, version, and a scan of this repository gives the expected "not enough yet" message). Not done: a GitHub release page (needs the web UI), the README GIF, and a real-LLM re-check of the coherence ranking.
