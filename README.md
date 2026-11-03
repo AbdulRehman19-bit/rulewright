@@ -13,7 +13,7 @@ messages. Nothing is written until you approve it.
 > so and proposes nothing. Treat every proposal as a shortlist to review, not a list to accept.
 > `prove` and `guard` are newer still: `prove` needs Docker and shows evidence, not proof.
 
-<!-- TODO before launch: GIF of `rulewright scan` on a known public repo -->
+![rulewright scanning litellm: it reads the history, clusters the mistakes, and proposes rules with evidence](https://raw.githubusercontent.com/AbdulRehman19-bit/rulewright/main/docs/demo.gif)
 
 ## Install
 
