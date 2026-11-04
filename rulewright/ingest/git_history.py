@@ -14,9 +14,15 @@ _AGENT_AUTHOR = re.compile(
     rf"(?:{_AGENTS})[\w.+-]*\[bot\]|noreply@anthropic\.com|\+(?:copilot|claude)@users\.noreply",
     re.I,
 )
-_REC = "\x1e"  # starts a commit record
-_FLD = "\x1f"  # separates header fields
-_END = "\x1d"  # ends the header; numstat and patch follow
+# Separators contain a NUL byte. Git refuses NUL in commit messages and names, so no commit can
+# forge one; control characters such as \x1e are allowed in messages and broke parsing.
+_REC = "\x00REC\x00"  # starts a commit record
+_FLD = "\x00FLD\x00"  # separates header fields
+_END = "\x00END\x00"  # ends the header; numstat and patch follow
+
+
+def _for_git(sep: str) -> str:
+    return sep.replace("\x00", "%x00")  # in a --format string git prints %x00 as a NUL byte
 MAX_PATCH_CHARS = 20_000
 MAX_LINES_PER_FILE = 1000  # per direction; keeps huge generated files from dominating memory
 MAX_LINE_CHARS = 200
@@ -76,6 +82,7 @@ def _git(repo: Path, *args: str) -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",  # a commit message in another encoding must not crash the scan
     ).stdout
 
 
@@ -110,15 +117,20 @@ def read_commits(repo: Path, limit: int = 500) -> list[Commit]:
     if limit < 1:
         raise HistoryError("The number of commits to read must be at least 1.")
     _check_repo(repo)
-    fmt = _FLD.join(["%H", "%P", "%an", "%ae", "%aI", "%s", "%b"]) + _END
+    fmt = _for_git(_FLD).join(["%H", "%P", "%an", "%ae", "%aI", "%s", "%b"]) + _for_git(_END)
     out = _git(
-        repo, "log", f"-n{limit}", "--no-renames", "--numstat", "-p", "-U0",
-        f"--format={_REC}{fmt}", "--", ".", *_EXCLUDE,
+        repo, "-c", "core.quotepath=false", "log", f"-n{limit}", "--no-renames", "--numstat",
+        "-p", "-U0",
+        f"--format={_for_git(_REC)}{fmt}", "--", ".", *_EXCLUDE,
     )  # fmt: skip
     commits: list[Commit] = []
     for rec in out.split(_REC)[1:]:
         header, _, rest = rec.partition(_END)
-        sha, parents, name, email, ts, subject, body = header.split(_FLD)
+        try:
+            sha, parents, name, email, ts, subject, body = header.split(_FLD)
+            when = datetime.fromisoformat(ts)
+        except ValueError:
+            continue  # one unreadable commit must not stop the scan
         body = body.strip()
         stat, patch = _split_stat_patch(rest)
         commits.append(
@@ -127,7 +139,7 @@ def read_commits(repo: Path, limit: int = 500) -> list[Commit]:
                 parents=parents.split(),
                 author_name=name,
                 author_email=email,
-                ts=datetime.fromisoformat(ts),
+                ts=when,
                 subject=subject,
                 body=body,
                 files=_parse_files(stat, patch),
@@ -140,8 +152,50 @@ def read_commits(repo: Path, limit: int = 500) -> list[Commit]:
 
 
 _NUMSTAT = re.compile(r"^(\d+|-)\t(\d+|-)\t(.+)$")
-_DIFF_HEADER = re.compile(r"^diff --git a/.+ b/(.+)$")
+_DIFF_PREFIX = "diff --git "
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
+_C_ESCAPES = {"a": 7, "b": 8, "f": 12, "n": 10, "r": 13, "t": 9, "v": 11, '"': 34, "\\": 92}
+
+
+def _unquote(name: str) -> str:
+    """Undo git's C-style quoting of a path (names with quotes, backslashes or control
+    characters, and non-ASCII names when core.quotepath is on)."""
+    if len(name) < 2 or name[0] != '"' or name[-1] != '"':
+        return name
+    body, out, i = name[1:-1], bytearray(), 0
+    while i < len(body):
+        c = body[i]
+        if c == "\\" and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt in "01234567":
+                j = i + 1
+                while j < len(body) and j < i + 4 and body[j] in "01234567":
+                    j += 1
+                out.append(int(body[i + 1 : j], 8) & 0xFF)
+                i = j
+                continue
+            if nxt in _C_ESCAPES:
+                out.append(_C_ESCAPES[nxt])
+                i += 2
+                continue
+        out.extend(c.encode("utf-8"))
+        i += 1
+    return out.decode("utf-8", errors="replace")
+
+
+def _header_path(line: str) -> str | None:
+    """The file in a `diff --git a/P b/P` line. With --no-renames both halves are the same, so
+    the path is found by length: names containing spaces or " b/" stay unambiguous."""
+    if not line.startswith(_DIFF_PREFIX):
+        return None
+    rest = line[len(_DIFF_PREFIX) :]
+    half = (len(rest) - 1) // 2
+    if half < 3 or rest[half] != " ":
+        return None
+    first, second = _unquote(rest[:half]), _unquote(rest[half + 1 :])
+    if not first.startswith("a/") or second != "b/" + first[2:]:
+        return None
+    return first[2:]
 
 
 def _split_stat_patch(text: str) -> tuple[str, str]:
@@ -169,9 +223,9 @@ def _parse_hunks(patch: str) -> dict[str, _Hunks]:
     hunks: dict[str, _Hunks] = {}
     current: _Hunks | None = None
     for line in patch.splitlines():
-        m = _DIFF_HEADER.match(line)
-        if m:
-            current = hunks[m.group(1)] = _Hunks()
+        path = _header_path(line)
+        if path is not None:
+            current = hunks[path] = _Hunks()
             continue
         if current is None:
             continue
@@ -198,7 +252,8 @@ def _parse_files(stat: str, patch: str) -> list[FileChange]:
     for line in stat.splitlines():
         m = _NUMSTAT.match(line)
         if m:
-            a, d, path = m.groups()
+            a, d, raw_path = m.groups()
+            path = _unquote(raw_path)
             h = hunks.get(path) or _Hunks()
             changes.append(
                 FileChange(
