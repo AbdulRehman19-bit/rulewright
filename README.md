@@ -1,6 +1,6 @@
 # rulewright
 
-**Your coding agent learns from its mistakes, provably, and safely.**
+**Find the mistakes your coding agent keeps repeating, and turn them into rules, with evidence you can check.**
 
 rulewright reads your repo's git history (and Claude Code session logs), finds the mistakes
 coding agents keep repeating, and proposes evidence-backed rules for `AGENTS.md`,
