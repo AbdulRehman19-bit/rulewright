@@ -348,3 +348,9 @@ def test_a_broken_settings_file_is_not_touched(
 def test_no_logs_gives_a_plain_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     result = _guard(tmp_path, monkeypatch, [])
     assert result.exit_code == 0 and "No shell commands found" in result.output
+
+
+def test_a_settings_file_saved_with_a_bom_is_read_normally(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_bytes(b"\xef\xbb\xbf" + json.dumps({"model": "m"}).encode("utf-8"))
+    assert load_settings(path) == {"model": "m"}

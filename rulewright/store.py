@@ -23,9 +23,20 @@ CREATE TABLE IF NOT EXISTS embeddings (
 
 
 def open_store(repo: Path) -> sqlite3.Connection:
+    """The embedding cache. It is only a speed-up, so a damaged file is replaced and an
+    unwritable folder (a read-only checkout) falls back to a cache held in memory."""
     d = repo / ".rulewright"
-    d.mkdir(exist_ok=True)
-    return connect(d / "cache.db")
+    path = d / "cache.db"
+    try:
+        d.mkdir(exist_ok=True)
+        try:
+            return connect(path)
+        except sqlite3.DatabaseError:  # "file is not a database" and similar
+            for leftover in (path, d / "cache.db-wal", d / "cache.db-shm"):
+                leftover.unlink(missing_ok=True)
+            return connect(path)
+    except (OSError, sqlite3.Error):
+        return connect(":memory:")
 
 
 def connect(path: Path | str) -> sqlite3.Connection:

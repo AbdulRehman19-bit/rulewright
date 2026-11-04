@@ -40,7 +40,13 @@ def plan_emit(repo: Path, rules_file: RulesFile) -> list[Change]:
     for name in rules_file.targets:
         target = TARGETS[name]
         path = repo / target.path
-        old = path.read_bytes().decode("utf-8") if path.is_file() else None
+        try:
+            old = path.read_bytes().decode("utf-8") if path.is_file() else None
+        except UnicodeDecodeError:
+            raise MarkerError(
+                f"{target.path} is not UTF-8 text, so rulewright will not edit it. "
+                "Convert it to UTF-8, or remove that target from rulewright.yaml."
+            ) from None
         if old is None and not accepted:
             continue  # nothing to say and no file to update
         new = apply_block(old, target.render(accepted))

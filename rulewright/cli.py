@@ -10,7 +10,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from rulewright.cluster.embed import Embedder, SentenceTransformerEmbedder
-from rulewright.config import load_config
+from rulewright.config import ConfigError, load_config
 from rulewright.guard.emit import (
     SettingsError,
     load_settings,
@@ -65,8 +65,15 @@ RepoOption = Annotated[Path, typer.Option("--repo", help="Repository root.")]
 
 
 def _fail(message: str, code: int = 1) -> typer.Exit:
-    console.print(f"[red]{message}[/red]")
+    console.print(f"[red]{escape(message)}[/red]")  # messages can quote file text with [brackets]
     return typer.Exit(code)
+
+
+def _limit(repo: Path, commits: int | None) -> int:
+    try:
+        return commits or load_config(repo).commits
+    except ConfigError as e:
+        raise _fail(str(e)) from None
 
 
 def _load(repo: Path) -> RulesFile:
@@ -140,7 +147,7 @@ def scan(
     ] = False,
 ) -> None:
     """Find repeated agent mistakes and propose rules. Changes no agent file."""
-    limit = commits or load_config(repo).commits
+    limit = _limit(repo, commits)
     existing = _load(repo)
     now = datetime.now(UTC)
 
@@ -202,10 +209,19 @@ def scan(
         console.print(table)
 
     report = repo / REPORT_NAME
-    report.write_text(render_report(result, repo, now), encoding="utf-8")
-    console.print(f"Report: {report}")
+    try:
+        report.write_text(render_report(result, repo, now), encoding="utf-8")
+        console.print(f"Report: {report}")
+    except OSError as e:  # a read-only checkout: the results above are still valid
+        console.print(f"[yellow]Could not write the report: {escape(str(e))}[/yellow]")
     if result.proposals is not None:
-        save_pending(repo, rules)
+        try:
+            save_pending(repo, rules)
+        except OSError as e:
+            console.print(
+                f"[yellow]Could not save the proposals, so `apply` will not see them: "
+                f"{escape(str(e))}[/yellow]"
+            )
     if rules:
         console.print("Nothing has been applied. Accept rules with `rulewright apply <id> ...`.")
     if pr:
@@ -243,7 +259,10 @@ def apply(
     repo: RepoOption = Path("."),
 ) -> None:
     """Accept pending proposals into rulewright.yaml and write the target files."""
-    pending = load_pending(repo)
+    try:
+        pending = load_pending(repo)
+    except RulesFileError as e:
+        raise _fail(str(e)) from None
     if not pending:
         raise _fail("No pending proposals. Run `rulewright scan` first.")
     if not ids and not all_safe:
@@ -297,7 +316,7 @@ def stale(
 ) -> None:
     """List accepted rules that mention missing paths or commands, or that went silent."""
     rules_file = _load(repo)
-    limit = commits or load_config(repo).commits
+    limit = _limit(repo, commits)
     try:
         history = read_commits(repo, limit)
     except HistoryError as e:
@@ -494,7 +513,7 @@ def guard(
     if not added:
         console.print(f"Every rule is already in {path.name}. Nothing to change.")
         raise typer.Exit(0)
-    before = path.read_text(encoding="utf-8") if path.exists() else ""
+    before = path.read_text(encoding="utf-8-sig") if path.exists() else ""
     text = unified_diff(before, render(new), f".claude/{path.name}")
     if diff or apply:
         console.print(text, markup=False, highlight=False)

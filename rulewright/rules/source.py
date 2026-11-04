@@ -8,7 +8,7 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, TypeAdapter
+from pydantic import BaseModel, TypeAdapter, ValidationError
 
 from rulewright.rules.model import Evidence, Rule, RuleStatus
 
@@ -79,6 +79,25 @@ def _rule_from_dict(raw: dict[str, object]) -> Rule:
     return Rule.model_validate({**raw, "evidence": evidence})
 
 
+def first_error(e: ValidationError) -> str:
+    """One readable line from a pydantic error: where it is and what is wrong."""
+    errors = e.errors()
+    first = errors[0]
+    where = ".".join(str(part) for part in first["loc"])
+    more = f" (and {len(errors) - 1} more)" if len(errors) > 1 else ""
+    return f"{where + ': ' if where else ''}{first['msg']}{more}"
+
+
+def _describe(e: Exception) -> str:
+    if isinstance(e, yaml.YAMLError):
+        mark = getattr(e, "problem_mark", None)
+        where = f" (line {mark.line + 1}, column {mark.column + 1})" if mark else ""
+        return f"is not valid YAML: {getattr(e, 'problem', None) or 'syntax error'}{where}"
+    if isinstance(e, ValidationError):
+        return first_error(e)
+    return " ".join(str(e).split())[:200]
+
+
 def load_rules(repo: Path) -> RulesFile:
     """The rules file, or an empty default when the repo has none yet."""
     path = repo / FILENAME
@@ -88,15 +107,19 @@ def load_rules(repo: Path) -> RulesFile:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if raw.get("version", 1) != 1:
             raise RulesFileError(f"{FILENAME}: unsupported version {raw['version']}")
+        rules = []
+        for number, entry in enumerate(raw.get("rules", []), 1):
+            try:
+                rules.append(_rule_from_dict(entry))
+            except ValidationError as e:
+                raise RulesFileError(f"{FILENAME}: rule #{number}: {first_error(e)}") from None
         return RulesFile(
-            version=1,
-            targets=raw.get("targets", list(DEFAULT_TARGETS)),
-            rules=[_rule_from_dict(r) for r in raw.get("rules", [])],
+            version=1, targets=raw.get("targets", list(DEFAULT_TARGETS)), rules=rules
         )
     except RulesFileError:
         raise
     except Exception as e:  # yaml, pydantic or key errors: all mean the file is unusable
-        raise RulesFileError(f"{FILENAME}: {e}") from e
+        raise RulesFileError(f"{FILENAME}: {_describe(e)}") from None
 
 
 def save_rules(repo: Path, rules_file: RulesFile) -> Path:
@@ -118,7 +141,13 @@ def load_pending(repo: Path) -> list[Rule]:
     path = repo / PENDING
     if not path.is_file():
         return []
-    return _PENDING_LIST.validate_json(path.read_text(encoding="utf-8"))
+    try:
+        return _PENDING_LIST.validate_json(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as e:
+        why = first_error(e) if isinstance(e, ValidationError) else "cannot be read"
+        raise RulesFileError(
+            f"{PENDING}: {why}. Run `rulewright scan` again to rebuild it."
+        ) from None
 
 
 def save_pending(repo: Path, rules: list[Rule]) -> None:

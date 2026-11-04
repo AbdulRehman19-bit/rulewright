@@ -142,3 +142,16 @@ def test_the_number_of_commits_must_be_positive(tmp_path: Path) -> None:
     for bad in ("0", "-5"):
         result = _invoke("scan", "--repo", str(tmp_path), "--commits", bad)
         assert result.exit_code == 2
+
+
+def test_scan_still_shows_its_results_when_the_report_cannot_be_written(
+    tmp_path: Path, llm: CitingLLM
+) -> None:
+    repo = tmp_path / "r"
+    fx.build_three_patterns(repo, start=datetime.now(UTC) - timedelta(days=40))
+    (repo / REPORT_NAME).mkdir()  # a folder where the report file should go
+    result = _scan(repo, "--yes")
+    text = " ".join(result.output.split())
+    assert result.exit_code == 0, result.output
+    assert "Could not write the report" in text and "proposed rule" in text
+    assert "Traceback" not in result.output

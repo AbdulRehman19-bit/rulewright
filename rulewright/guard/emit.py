@@ -27,7 +27,7 @@ def load_settings(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {}
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8-sig"))  # Notepad saves a BOM
     except (OSError, ValueError) as e:
         msg = f"{path} is not valid JSON ({e}); fix it first, nothing was changed."
         raise SettingsError(msg) from None

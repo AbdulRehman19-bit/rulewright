@@ -91,3 +91,33 @@ def test_up_to_date_files_produce_no_changes(tmp_path: Path) -> None:
 def test_unknown_target_is_an_error(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="unknown targets"):
         plan_emit(tmp_path, RulesFile(targets=["nope"]))
+
+
+def test_a_target_that_is_not_utf8_is_refused_and_left_alone(tmp_path: Path) -> None:
+    import pytest
+
+    from rulewright.rules.emit import MarkerError, plan_emit
+    from rulewright.rules.model import Rule
+    from rulewright.rules.source import RulesFile
+
+    original = b"# T\xe9l\xe9phone \xff\n"  # Latin-1, not UTF-8
+    (tmp_path / "AGENTS.md").write_bytes(original)
+    rf = RulesFile(rules=[Rule(id="r-1", text="Use the helper.", scope=["**"], status="accepted")],
+                   targets=["agents_md"])  # fmt: skip
+    with pytest.raises(MarkerError, match="not UTF-8"):
+        plan_emit(tmp_path, rf)
+    assert (tmp_path / "AGENTS.md").read_bytes() == original
+
+
+def test_crlf_and_bom_files_keep_their_line_endings_and_start(tmp_path: Path) -> None:
+    from rulewright.rules.emit import plan_emit, write_changes
+    from rulewright.rules.model import Rule
+    from rulewright.rules.source import RulesFile
+
+    rf = RulesFile(rules=[Rule(id="r-1", text="Use the helper.", scope=["**"], status="accepted")],
+                   targets=["agents_md"])  # fmt: skip
+    (tmp_path / "AGENTS.md").write_bytes(b"\xef\xbb\xbf# Title\r\nkeep me\r\n")
+    write_changes(plan_emit(tmp_path, rf))
+    out = (tmp_path / "AGENTS.md").read_bytes()
+    assert out.startswith(b"\xef\xbb\xbf# Title\r\nkeep me\r\n")
+    assert b"\n" not in out.replace(b"\r\n", b"")  # no bare line feeds mixed in

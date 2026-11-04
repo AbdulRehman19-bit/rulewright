@@ -135,3 +135,22 @@ def test_select_clusters_skips_incoherent_ones_and_ranks_by_coherence() -> None:
     assert [c.id for c in chosen] == ["c-tight", "c-mid"] and skipped == 1
     only, _ = select_clusters(clusters, tight + loose + mid, {"r-tight"})
     assert [c.id for c in only] == ["c-mid"]  # a rule that already exists is not asked for again
+
+
+def test_a_damaged_cache_file_is_replaced_and_an_unwritable_folder_falls_back(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    from rulewright.store import get_embeddings, open_store, put_embeddings
+
+    repo = tmp_path / "r"
+    (repo / ".rulewright").mkdir(parents=True)
+    (repo / ".rulewright" / "cache.db").write_bytes(b"this is not a sqlite database at all" * 50)
+    conn = open_store(repo)
+    put_embeddings(conn, "m", {"k": np.ones(3, dtype=np.float32)})
+    assert list(get_embeddings(conn, "m", ["k"])) == ["k"]
+    conn.close()
+
+    blocked = tmp_path / "b"
+    blocked.mkdir()
+    (blocked / ".rulewright").write_text("a file where the folder should be", encoding="utf-8")
+    conn = open_store(blocked)  # cannot create the folder: held in memory instead
+    put_embeddings(conn, "m", {"k": np.ones(3, dtype=np.float32)})
+    assert list(get_embeddings(conn, "m", ["k"])) == ["k"]
