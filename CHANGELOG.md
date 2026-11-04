@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.2
+
+- Fixed a crash when a commit message contains certain control characters, and a silent loss of
+  signals for files with non-English names. A message in another text encoding no longer stops
+  a scan.
+- Damaged or hand-edited files now give one plain sentence: `rulewright.yaml` (line and column,
+  or which rule and field), `.rulewright/config.toml`, and a damaged `.rulewright/pending.json`.
+- A corrupt `.rulewright/cache.db` is replaced. A read-only checkout works: the report and the
+  proposals are skipped with a warning and the results are still shown.
+- `guard` reads a `.claude/settings.json` that starts with a byte-order mark. `emit` refuses a
+  target file that is not UTF-8 and leaves it untouched.
+- README: the tagline no longer says "provably".
+
 ## 0.1.1
 
 - A folder that is not a git repository, a repository with no commits and a missing path now
